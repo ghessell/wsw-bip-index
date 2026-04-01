@@ -200,6 +200,7 @@
   ::-webkit-scrollbar-thumb { background: #2E2E2E; border-radius: 3px; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
 <body>
 
@@ -301,6 +302,26 @@
   <div class="section-header">
     <span class="section-title">Drill BIP Profile Index</span>
     <span class="section-sub">Enter drill data to calculate match-similarity score</span>
+  </div>
+  <div style="margin-bottom:16px;padding:12px 14px;background:rgba(52,152,219,0.07);border:1px solid rgba(52,152,219,0.2);border-radius:4px;">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <div>
+        <div style="font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:#3498DB;font-weight:700;margin-bottom:4px;">Import from Training PDF</div>
+        <div style="font-size:11px;color:#777;">Reads GPS session report — extracts drill groups, BIP time and median BOP. Select a drill to auto-fill the form.</div>
+      </div>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:8px;">
+        <button onclick="document.getElementById('pdf-drill-input').click()"
+          style="padding:7px 14px;background:rgba(52,152,219,0.15);border:1px solid rgba(52,152,219,0.4);color:#3498DB;font-weight:700;font-size:12px;letter-spacing:1px;cursor:pointer;border-radius:3px;">
+          &#43; Import PDF
+        </button>
+        <input type="file" id="pdf-drill-input" accept=".pdf" style="display:none;" onchange="importDrillPDF(this)" />
+      </div>
+    </div>
+    <div id="pdf-drill-results" style="display:none;margin-top:12px;border-top:1px solid rgba(52,152,219,0.2);padding-top:12px;">
+      <div style="font-size:10px;letter-spacing:1px;text-transform:uppercase;color:#777;margin-bottom:8px;">Drills found — click to load into audit form</div>
+      <div id="pdf-drill-list" style="display:flex;flex-direction:column;gap:6px;"></div>
+    </div>
+    <div id="pdf-drill-status" style="font-size:11px;color:#777;margin-top:6px;"></div>
   </div>
   <div class="audit-layout">
     <div>
@@ -1307,6 +1328,292 @@ function renderSession() {
     + buildBipDistChart(countable, 'Session')
     + buildBopProfileChart(countable, 'Session');
 }
+
+
+// ========== PDF DRILL IMPORT ==========
+function importDrillPDF(input) {
+  var file = input.files[0];
+  if (!file) return;
+  var statusEl = document.getElementById('pdf-drill-status');
+  var resultsEl = document.getElementById('pdf-drill-results');
+  var listEl = document.getElementById('pdf-drill-list');
+  statusEl.textContent = 'Reading PDF\u2026';
+  resultsEl.style.display = 'none';
+
+  if (!window.pdfjsLib) {
+    statusEl.textContent = 'PDF library not loaded. Check internet connection.';
+    return;
+  }
+  window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var typedArr = new Uint8Array(e.target.result);
+    pdfjsLib.getDocument({data: typedArr}).promise.then(function(pdfDoc) {
+      var pageTexts = [];
+      var pagePromises = [];
+      for (var p = 1; p <= pdfDoc.numPages; p++) {
+        pagePromises.push(pdfDoc.getPage(p).then(function(page) {
+          return page.getTextContent().then(function(content) {
+            // Collect items with their x,y positions for layout reconstruction
+            var items = content.items.map(function(item) {
+              return { text: item.str, x: Math.round(item.transform[4]), y: Math.round(item.transform[5]) };
+            });
+            pageTexts.push(items);
+          });
+        }));
+      }
+      return Promise.all(pagePromises).then(function() {
+        return parseDrillPDF(pageTexts, statusEl, resultsEl, listEl);
+      });
+    }).catch(function(err) {
+      statusEl.textContent = 'Error reading PDF: ' + err.message;
+    });
+  };
+  reader.readAsArrayBuffer(file);
+  input.value = '';
+}
+
+function parseDrillPDF(pageTexts, statusEl, resultsEl, listEl) {
+  var BIN_RANGES = [
+    {name:'0-15s',   lo:0,   hi:15},
+    {name:'15-30s',  lo:15,  hi:30},
+    {name:'30-60s',  lo:30,  hi:60},
+    {name:'60-90s',  lo:60,  hi:90},
+    {name:'90-120s', lo:90,  hi:120},
+    {name:'120-150s',lo:120, hi:150},
+    {name:'150-200s',lo:150, hi:200},
+    {name:'200+s',   lo:200, hi:99999}
+  ];
+
+  function mmssToSecs(s) {
+    if (!s) return 0;
+    s = s.trim();
+    var p = s.split(':');
+    if (p.length === 2) return parseInt(p[0])*60 + parseInt(p[1]);
+    if (p.length === 3) return parseInt(p[0])*3600 + parseInt(p[1])*60 + parseInt(p[2]);
+    return 0;
+  }
+  function getBin(secs) {
+    for (var i = 0; i < BIN_RANGES.length; i++) {
+      if (secs >= BIN_RANGES[i].lo && secs < BIN_RANGES[i].hi) return i;
+    }
+    return BIN_RANGES.length - 1;
+  }
+  function median(arr) {
+    if (!arr.length) return 0;
+    var s = arr.slice().sort(function(a,b){return a-b;});
+    var m = Math.floor(s.length/2);
+    return s.length%2 ? s[m] : (s[m-1]+s[m])/2;
+  }
+  function isMMSS(s) { return /^\d{1,2}:\d{2}$/.test((s||'').trim()); }
+
+  // Group page items into lines by y-coordinate
+  function toLines(items) {
+    var lines = [];
+    items.forEach(function(item) {
+      for (var i = 0; i < lines.length; i++) {
+        if (Math.abs(lines[i].y - item.y) <= 3) {
+          lines[i].tokens.push(item); return;
+        }
+      }
+      lines.push({y: item.y, tokens: [item]});
+    });
+    return lines.sort(function(a,b){return b.y - a.y;}); // top-to-bottom
+  }
+
+  // ── PAGE 1: per-rep BIP durations → bin counts + BOP for median ──────────
+  var repData = {}; // canonical name → {binCounts:[8 ints], bops:[secs], bipSecs:[secs]}
+
+  if (pageTexts.length > 0) {
+    var lines1 = toLines(pageTexts[0]);
+
+    // Find header y so we skip column headers
+    var headerY = -1;
+    lines1.forEach(function(line) {
+      var texts = line.tokens.map(function(t){return t.text.trim();}).filter(Boolean);
+      if (texts.indexOf('Drills') >= 0) headerY = line.y;
+    });
+
+    lines1.forEach(function(line) {
+      if (headerY > 0 && line.y >= headerY) return; // skip header rows
+      var tokens = line.tokens.slice().sort(function(a,b){return a.x - b.x;});
+      var texts  = tokens.map(function(t){return t.text.trim();}).filter(Boolean);
+      if (texts.length < 3) return;
+
+      // Need at least 2 MM:SS values: first = BIP duration, last = BOP duration
+      var mmssVals = texts.filter(isMMSS);
+      if (mmssVals.length < 2) return;
+
+      // Drill name = non-numeric tokens before first MM:SS
+      var nameTokens = [], hitFirst = false;
+      texts.forEach(function(t) {
+        if (!hitFirst && isMMSS(t)) { hitFirst = true; return; }
+        if (!hitFirst && isNaN(parseFloat(t))) nameTokens.push(t);
+      });
+      var repName = nameTokens.join(' ').trim();
+      if (!repName || repName.length < 3) return;
+
+      var bipSecs = mmssToSecs(mmssVals[0]);
+      var bopSecs = mmssToSecs(mmssVals[mmssVals.length - 1]);
+      if (bipSecs === 0) return;
+
+      // Canonical name: strip rep suffix " - N" or " - 1.N"
+      var canonical = repName.replace(/\s*-\s*\d+(\.\d+)?\s*$/, '').trim();
+
+      if (!repData[canonical]) {
+        repData[canonical] = {
+          binCounts: [0,0,0,0,0,0,0,0],
+          bops: [],
+          bipSecs: []
+        };
+      }
+      var binIdx = getBin(bipSecs);
+      repData[canonical].binCounts[binIdx]++;
+      repData[canonical].bipSecs.push(bipSecs);
+      if (bopSecs > 0 && bopSecs < 600) repData[canonical].bops.push(bopSecs);
+    });
+  }
+
+  // ── PAGE 2: drill-group totals (total time + ball rolling) ───────────────
+  var drillTotals = {};
+  var SKIP = ['Warm Up','WarmUp','Total','TOTAL','Skills','skills','BIP','#DIV'];
+
+  if (pageTexts.length > 1) {
+    var lines2 = toLines(pageTexts[1]);
+    lines2.forEach(function(line) {
+      var tokens = line.tokens.slice().sort(function(a,b){return a.x - b.x;});
+      var texts  = tokens.map(function(t){return t.text.trim();}).filter(Boolean);
+      var hasAMPM = texts.some(function(t){ return /[AP]M$/.test(t); });
+      if (!hasAMPM) return;
+
+      var mmssVals = texts.filter(isMMSS);
+      if (mmssVals.length < 2) return;
+
+      var nameTokens = [], pastName = false;
+      texts.forEach(function(t) {
+        if (/[AP]M$/.test(t)) { pastName = true; return; }
+        if (!pastName && !/^\d+$/.test(t)) nameTokens.push(t);
+      });
+      var drillName = nameTokens.join(' ').trim();
+      if (!drillName || SKIP.some(function(s){ return drillName.indexOf(s) >= 0; })) return;
+
+      var totalSecs = mmssToSecs(mmssVals[0]);
+      var bipSecs   = mmssToSecs(mmssVals[1]);
+      if (totalSecs === 0 || bipSecs === 0) return;
+      drillTotals[drillName] = {totalSecs: totalSecs, bipSecs: bipSecs};
+    });
+  }
+
+  // ── MERGE page2 groups with page1 rep data ────────────────────────────────
+  var results = [];
+  Object.keys(drillTotals).forEach(function(name) {
+    var tot = drillTotals[name];
+
+    // Flexible match: "PG - 10v6" (p2) ↔ "PG - 10v6+1" (p1)
+    var matchKey = null;
+    var bestScore = 0;
+    Object.keys(repData).forEach(function(k) {
+      var n1 = name.toLowerCase().replace(/[^a-z0-9]/g,'');
+      var n2 = k.toLowerCase().replace(/[^a-z0-9]/g,'');
+      var score = 0;
+      if (n2.indexOf(n1) >= 0 || n1.indexOf(n2) >= 0) score = Math.min(n1.length, n2.length);
+      if (score > bestScore) { bestScore = score; matchKey = k; }
+    });
+
+    var binCounts  = [0,0,0,0,0,0,0,0];
+    var medBOPsecs = 0;
+    var repCount   = 0;
+
+    if (matchKey && repData[matchKey]) {
+      binCounts  = repData[matchKey].binCounts;
+      medBOPsecs = Math.round(median(repData[matchKey].bops));
+      repCount   = repData[matchKey].bipSecs.length;
+    }
+
+    results.push({
+      name:       name,
+      totalMins:  parseFloat((tot.totalSecs/60).toFixed(1)),
+      bipMins:    parseFloat((tot.bipSecs/60).toFixed(1)),
+      medBOPsecs: medBOPsecs,
+      repCount:   repCount,
+      binCounts:  binCounts
+    });
+  });
+
+  // ── RENDER ────────────────────────────────────────────────────────────────
+  if (!results.length) {
+    statusEl.textContent = 'No drills found. Confirm this is a GPS session report PDF.';
+    return;
+  }
+  statusEl.textContent = results.length + ' drill group' + (results.length!==1?'s':'') + ' found from PDF.';
+
+  var BIN_LABELS = ['0-15s','15-30s','30-60s','60-90s','90-120s','120-150s','150-200s','200+s'];
+  listEl.innerHTML = results.map(function(d, i) {
+    var bipPct = d.totalMins>0 ? Math.round((d.bipMins/d.totalMins)*100) : 0;
+    var totalBins = d.binCounts.reduce(function(a,b){return a+b;},0);
+    var binSummary = BIN_LABELS.map(function(lbl,bi){
+      return d.binCounts[bi]>0 ? d.binCounts[bi]+'\xd7 '+lbl : null;
+    }).filter(Boolean).join(', ');
+
+    return '<div style="padding:10px 12px;background:var(--panel2);border:1px solid var(--border);border-radius:3px;cursor:pointer;transition:border-color 0.15s;"'
+      +' onclick="loadPDFDrill('+i+')"'
+      +' onmouseover="this.style.borderColor=\'rgba(52,152,219,0.5)\'"'
+      +' onmouseout="this.style.borderColor=\'var(--border)\'">'
+      +'<div style="display:flex;align-items:center;gap:10px;">'
+      +'<div style="flex:1;">'
+      +'<div style="font-weight:600;font-size:13px;">'+d.name+'</div>'
+      +'<div style="font-size:11px;color:#777;margin-top:3px;">'
+      +d.repCount+' rep'+(d.repCount!==1?'s':'')+' &nbsp;\xb7&nbsp; '
+      +d.totalMins+'min &nbsp;\xb7&nbsp; BIP '+d.bipMins+'min ('+bipPct+'%)'
+      +(d.medBOPsecs?' &nbsp;\xb7&nbsp; Med BOP '+d.medBOPsecs+'s':'')
+      +'</div>'
+      +(binSummary?'<div style="font-size:10px;color:#555;margin-top:3px;">Bins: '+binSummary+'</div>':'')
+      +'</div>'
+      +'<div style="font-size:10px;letter-spacing:1px;color:#3498DB;font-weight:700;flex-shrink:0;">LOAD \u2192</div>'
+      +'</div></div>';
+  }).join('');
+
+  window._pdfDrillResults = results;
+  resultsEl.style.display = 'block';
+}
+
+
+function loadPDFDrill(idx) {
+  var d = window._pdfDrillResults[idx];
+  if (!d) return;
+
+  // Fill core fields
+  document.getElementById('drill-name').value     = d.name;
+  document.getElementById('drill-duration').value = d.totalMins;
+  document.getElementById('drill-bip').value      = d.bipMins;
+  if (d.medBOPsecs > 0) document.getElementById('drill-median-bop').value = d.medBOPsecs;
+
+  // Fill bin counts from rep BIP durations (computed during parse)
+  if (d.binCounts && d.binCounts.length === 8) {
+    d.binCounts.forEach(function(count, i) {
+      var el = document.getElementById('b' + i);
+      if (el) el.value = count > 0 ? count : '';
+    });
+  }
+
+  // Status message
+  var totalBins = d.binCounts ? d.binCounts.reduce(function(a,b){return a+b;},0) : 0;
+  var msg = 'Loaded "'+d.name+'" \u2013 '+d.repCount+' reps, '
+    +d.totalMins+'min total, BIP '+d.bipMins+'min';
+  if (d.medBOPsecs) msg += ', Med BOP '+d.medBOPsecs+'s';
+  if (totalBins > 0) msg += '. Bin counts auto-filled from rep durations. Review then click Calculate.';
+  else msg += '. Check bin counts, then click Calculate.';
+  document.getElementById('pdf-drill-status').textContent = msg;
+
+  // Scroll audit form into view and highlight bins briefly
+  var firstBin = document.getElementById('b0');
+  if (firstBin) firstBin.scrollIntoView({behavior:'smooth', block:'center'});
+
+  showToast('Loaded "'+d.name+'" \u2013 all fields pre-filled');
+}
+
 
 // ========== CONSTANTS ==========
 const BINS = ["0-15s","15-30s","30-60s","60-90s","90-120s","120-150s","150-200s","200+s"];
