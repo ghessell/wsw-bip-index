@@ -263,9 +263,8 @@
     <div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
       <h3 class="sub-heading" style="margin-bottom:0;">Season BIP % by Game</h3>
-      <div style="display:flex;align-items:center;gap:8px;">
-        <div id="season-quick-stats" style="display:flex;gap:16px;font-size:12px;color:var(--muted);"></div>
-        <button id="name-toggle-btn" onclick="toggleNameMode()" style="padding:5px 12px;background:var(--panel2);border:1px solid var(--border);color:var(--muted);font-weight:600;font-size:11px;letter-spacing:1px;cursor:pointer;border-radius:3px;">Show Names</button>
+      <div id="season-quick-stats" style="display:flex;gap:16px;font-size:12px;color:var(--muted);"></div>
+        
       </div>
     </div>
       <div class="card">
@@ -498,15 +497,6 @@
     </div>
   </div>
 
-  <h3 class="sub-heading">3 · Weekly BIP Density Arc</h3>
-  <div class="weekly-arc">
-    <div class="arc-day"><div class="arc-day-label">MON</div><div class="arc-md">RECOV</div><div class="arc-targets"><div><strong>BIP%:</strong> —</div><div><strong>Focus:</strong> Recovery</div></div></div>
-    <div class="arc-day"><div class="arc-day-label">TUE</div><div class="arc-md">MD–4</div><div class="arc-targets"><div><strong>BIP%:</strong> 45–55%</div><div><strong>Restart:</strong> Recovery</div><div><strong>BPI target:</strong> 30–50</div></div></div>
-    <div class="arc-day"><div class="arc-day-label">WED</div><div class="arc-md">MD–3</div><div class="arc-targets"><div><strong>BIP%:</strong> 50–60%</div><div><strong>Restart:</strong> Norm</div><div><strong>BPI target:</strong> 40–60</div></div></div>
-    <div class="arc-day"><div class="arc-day-label">THU</div><div class="arc-md">MD–2</div><div class="arc-targets"><div><strong>BIP%:</strong> 55–65%</div><div><strong>Restart:</strong> Norm/Press</div><div><strong>BPI target:</strong> 50–70</div></div></div>
-    <div class="arc-day"><div class="arc-day-label">FRI</div><div class="arc-md">MD–1</div><div class="arc-targets"><div><strong>BIP%:</strong> 60–70%</div><div><strong>Restart:</strong> Press/Norm</div><div><strong>BPI target:</strong> 60–80</div></div></div>
-  </div>
-  <div class="info-note">True Type B stimulus is most achievable in large-sided formats (11v11, 9v9) where per-player passive recovery mirrors match structure. In smaller formats, intensity and restart pressure are inherently in tension — choose deliberately.</div>
 </div>
 
 <script>
@@ -534,8 +524,8 @@ let weekSessions = {};
 let calendarRefDate = new Date().toISOString().slice(0,10);
 
 function toggleNameMode() {
-  nameDisplayMode = nameDisplayMode === 'logo' ? 'full' : 'logo';
-  document.getElementById('name-toggle-btn').textContent = nameDisplayMode === 'logo' ? 'Show Names' : 'Show Logos';
+  // Name toggle removed — always show logos
+  nameDisplayMode = 'logo';
   renderSeasonChart();
   renderGameList();
 }
@@ -636,8 +626,7 @@ function renderCalendar() {
     return '<div style="background:'+(isToday?'rgba(196,18,48,0.06)':'var(--panel2)')+';border:1px solid '+(isToday?'rgba(196,18,48,0.3)':'var(--border)')+';border-radius:4px;padding:10px;min-height:120px;">'
       +'<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">'
       +'<span style="font-weight:700;font-size:13px;color:'+(isToday?'var(--red-light)':'var(--text)')+';">'+DAY[i]+' '+dayNum+' '+mon+'</span>'
-      +'<span style="font-size:10px;color:#555;letter-spacing:1px;">'+(MD[i]||'')+'</span>'
-      +'</div>'
+            +'</div>'
       +sessHtml
       +(sessions.length===0?'<div style="font-size:10px;color:#2A2A2A;margin-top:8px;">No sessions</div>':'')
       +'</div>';
@@ -1014,9 +1003,10 @@ function renderDrillLibrary() {
     var typeCol = d.score>=60?'#27AE60':d.medBOP>45?'#3498DB':'#E67E22';
     var typeLbl = d.type ? d.type.split('\u2014')[0].trim() : '';
     var savedDate = d.savedAt ? new Date(d.savedAt).toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'2-digit'}) : '';
+    var gpsTag = d.gps ? '<span style="font-size:9px;padding:1px 5px;background:rgba(52,152,219,0.15);color:#3498DB;border-radius:2px;margin-left:5px;">GPS</span>' : '';
     return '<div style="display:grid;grid-template-columns:1fr 60px 60px 60px 60px 80px 90px auto;gap:0;align-items:center;padding:10px 12px;border-bottom:1px solid #1A1A1A;transition:background 0.15s;"'
       +' onmouseover="this.style.background=\'#1E1E1E\'" onmouseout="this.style.background=\'transparent\'">'
-      +'<div style="font-weight:600;font-size:13px;">'+d.name+'<div style="font-size:10px;color:#555;margin-top:2px;">'+savedDate+'</div></div>'
+      +'<div style="font-weight:600;font-size:13px;">'+d.name+gpsTag+'<div style="font-size:10px;color:#555;margin-top:2px;">'+savedDate+'</div></div>'
       +'<div style="text-align:center;font-size:12px;color:#777;">'+d.duration+'min</div>'
       +'<div style="text-align:center;font-size:12px;color:#777;">'+d.bipPct+'%</div>'
       +'<div style="text-align:center;font-size:12px;color:#777;">'+d.medBOP+'s</div>'
@@ -1076,13 +1066,15 @@ function exportSessionCSV() {
   var label = (document.getElementById('session-label')||{value:''}).value || 'Session';
   var dateVal = (document.getElementById('session-date')||{value:''}).value || new Date().toISOString().slice(0,10);
   var mdVal = (document.getElementById('session-md')||{value:''}).value || '';
-  var rows = [['Date','Session_Label','MD_Tag','Drill_Name','Duration_min','BIP_Time_min','BIP_Pct','Med_BOP_sec','BPI_Score','Distribution_Score','Restart_Score','Density_Score','Drill_Type','Drill_Format']];
+  var rows = [['Date','Session_Label','MD_Tag','Drill_Name','Duration_min','BIP_Time_min','BIP_Pct','Med_BOP_sec','BPI_Score','Distribution_Score','Restart_Score','Density_Score','Drill_Type','Drill_Format','HMLD_per_min','HSR_per_min','Dist_per_min','Accels_per_min','Decels_per_min']];
   countable.forEach(function(d){
+    var g = d.gps || {};
     rows.push([
       dateVal, label, mdVal,
       d.name, d.duration, d.bipMins, d.bipPct, d.medBOP,
       d.score, d.distScore||'', d.restartScore||'', d.densityScore||'',
-      (d.type||'').replace(/,/g,' '), d.format
+      (d.type||'').replace(/,/g,' '), d.format,
+      g.hmldPerMin||'', g.hsrPerMin||'', g.distPerMin||'', g.accelsPerMin||'', g.decelsPerMin||''
     ]);
   });
   downloadCSV(rows, 'WSW_Session_'+dateVal+'.csv');
@@ -1090,17 +1082,19 @@ function exportSessionCSV() {
 
 function exportWeekCSV() {
   var dates = getWeekDates(calendarRefDate);
-  var allRows = [['Date','Session_Label','MD_Tag','Drill_Name','Duration_min','BIP_Time_min','BIP_Pct','Med_BOP_sec','BPI_Score','Distribution_Score','Restart_Score','Density_Score','Drill_Type','Drill_Format']];
+  var allRows = [['Date','Session_Label','MD_Tag','Drill_Name','Duration_min','BIP_Time_min','BIP_Pct','Med_BOP_sec','BPI_Score','Distribution_Score','Restart_Score','Density_Score','Drill_Type','Drill_Format','HMLD_per_min','HSR_per_min','Dist_per_min','Accels_per_min','Decels_per_min']];
   dates.forEach(function(date){
     var sessions = weekSessions[date]||[];
     sessions.forEach(function(s){
       var countable = s.drills.filter(function(d){return d.format==='countable';});
       countable.forEach(function(d){
+        var g = d.gps || {};
         allRows.push([
           date, s.label, s.mdVal||'',
           d.name, d.duration, d.bipMins, d.bipPct, d.medBOP,
           d.score, d.distScore||'', d.restartScore||'', d.densityScore||'',
-          (d.type||'').replace(/,/g,' '), d.format
+          (d.type||'').replace(/,/g,' '), d.format,
+          g.hmldPerMin||'', g.hsrPerMin||'', g.distPerMin||'', g.accelsPerMin||'', g.decelsPerMin||''
         ]);
       });
     });
@@ -1112,14 +1106,16 @@ function exportWeekCSV() {
 
 function exportLibraryCSV() {
   if (!drillLibrary.length) { alert('Drill library is empty.'); return; }
-  var rows = [['Drill_Name','Saved_Date','Duration_min','BIP_Time_min','BIP_Pct','Med_BOP_sec','BPI_Score','Distribution_Score','Restart_Score','Density_Score','Drill_Type']];
+  var rows = [['Drill_Name','Saved_Date','Duration_min','BIP_Time_min','BIP_Pct','Med_BOP_sec','BPI_Score','Distribution_Score','Restart_Score','Density_Score','Drill_Type','HMLD_per_min','HSR_per_min','Dist_per_min','Accels_per_min','Decels_per_min']];
   drillLibrary.forEach(function(d){
+    var g = d.gps || {};
     rows.push([
       d.name,
       d.savedAt ? new Date(d.savedAt).toLocaleDateString('en-AU') : '',
       d.duration, d.bipMins, d.bipPct, d.medBOP,
       d.score, d.distScore||'', d.restartScore||'', d.densityScore||'',
-      (d.type||'').replace(/,/g,' ')
+      (d.type||'').replace(/,/g,' '),
+      g.hmldPerMin||'', g.hsrPerMin||'', g.distPerMin||'', g.accelsPerMin||'', g.decelsPerMin||''
     ]);
   });
   downloadCSV(rows, 'WSW_DrillLibrary.csv');
@@ -1214,10 +1210,11 @@ function calculateScore() {
   }).join('');
 
   var binCounts = binVals.slice();
+  var gpsData = (window._pendingGPS && Object.keys(window._pendingGPS).length) ? window._pendingGPS : null;
   pendingDrill = { name:drillName, duration:duration, bipMins:bipMins, bipPct:drillBipPct.toFixed(1),
     medBOP:medBOP, score:compositeScore, distScore:Math.round(distScore),
     restartScore:Math.round(restartScore), densityScore:Math.round(densityScore),
-    type:dt, format:format, binCounts:binCounts };
+    type:dt, format:format, binCounts:binCounts, gps:gpsData };
 
   (function() {
     var sc = scoreColor;
@@ -1245,6 +1242,27 @@ function calculateScore() {
     out += '<div style="padding:9px;background:var(--panel2);border-radius:3px;"><div style="color:#777;margin-bottom:3px;">Median BOP</div><div style="font-weight:700;font-size:18px;">'+medBOP+'s</div><div style="color:#777;font-size:11px;">Match: '+bench.est_median_bop+'s</div></div>';
     out += '<div style="padding:9px;background:var(--panel2);border-radius:3px;"><div style="color:#777;margin-bottom:3px;">Distribution SAD</div><div style="font-weight:700;font-size:18px;">'+sadSum.toFixed(1)+'</div><div style="color:#777;font-size:11px;">0 = identical</div></div>';
     out += '</div></div>';
+    // GPS panel — only shown if GPS data is available
+    if (gpsData) {
+      out += '<div style="background:var(--panel2);border:1px solid rgba(52,152,219,0.3);border-radius:4px;padding:12px 14px;margin-bottom:14px;">';
+      out += '<div style="font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#3498DB;margin-bottom:8px;">GPS Load Profile</div>';
+      out += '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;font-size:11px;">';
+      var gpsMetrics = [
+        {k:'hmldPerMin',  lbl:'HMLD/min',   unit:'',    col:'#E74C3C'},
+        {k:'hsrPerMin',   lbl:'HSR/min',    unit:'m',   col:'#F39C12'},
+        {k:'distPerMin',  lbl:'Dist/min',   unit:'m',   col:'#3498DB'},
+        {k:'accelsPerMin',lbl:'Acc/min',    unit:'',    col:'#9B59B6'},
+        {k:'decelsPerMin',lbl:'Dec/min',    unit:'',    col:'#1ABC9C'},
+      ];
+      gpsMetrics.forEach(function(m){
+        var val = gpsData[m.k] !== undefined ? gpsData[m.k] : '—';
+        out += '<div style="text-align:center;padding:8px;background:#111;border-radius:3px;">';
+        out += '<div style="font-size:15px;font-weight:800;color:'+m.col+';">'+val+(val!=='—'?m.unit:'')+'</div>';
+        out += '<div style="font-size:9px;color:#555;margin-top:2px;letter-spacing:0.5px;">'+m.lbl+'</div>';
+        out += '</div>';
+      });
+      out += '</div></div>';
+    }
     out += '<div style="background:var(--panel2);border:1px solid var(--border);border-radius:4px;padding:14px;margin-bottom:14px;">';
     out += '<div style="font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--gold);margin-bottom:8px;">Prescription Classification</div>';
     out += '<div class="presc-tags">';
@@ -1502,7 +1520,18 @@ function parseDrillPDF(pageTexts, statusEl, resultsEl, listEl) {
       var totalSecs = mmssToSecs(mmssVals[0]);
       var bipSecs   = mmssToSecs(mmssVals[1]);
       if (totalSecs === 0 || bipSecs === 0) return;
-      drillTotals[drillName] = {totalSecs: totalSecs, bipSecs: bipSecs};
+
+      // Extract GPS numeric columns after the two MM:SS values
+      // Order: TotalDist, Dist/min, HSR, HSR/min, vHSR, vHSR/min, HMLD, HMLD/min,
+      //        Accels, Accels/min, Decels, Decels/min
+      var GPS_KEYS = ['distTotal','distPerMin','hsr','hsrPerMin','vhsr','vhsrPerMin',
+                      'hmld','hmldPerMin','accels','accelsPerMin','decels','decelsPerMin'];
+      var numericVals = texts.filter(function(t){ return !isMMSS(t) && !isNaN(parseFloat(t)) && !/[AP]M$/.test(t); })
+                             .map(function(t){ return parseFloat(t); });
+      var gps = {};
+      GPS_KEYS.forEach(function(k, i){ if (numericVals[i] !== undefined) gps[k] = numericVals[i]; });
+
+      drillTotals[drillName] = {totalSecs: totalSecs, bipSecs: bipSecs, gps: gps};
     });
   }
 
@@ -1538,7 +1567,8 @@ function parseDrillPDF(pageTexts, statusEl, resultsEl, listEl) {
       bipMins:    parseFloat((tot.bipSecs/60).toFixed(1)),
       medBOPsecs: medBOPsecs,
       repCount:   repCount,
-      binCounts:  binCounts
+      binCounts:  binCounts,
+      gps:        tot.gps || {}
     });
   });
 
@@ -1597,6 +1627,9 @@ function loadPDFDrill(idx) {
       if (el) el.value = count > 0 ? count : '';
     });
   }
+
+  // Store GPS for later inclusion in pendingDrill
+  window._pendingGPS = d.gps || {};
 
   // Status message
   var totalBins = d.binCounts ? d.binCounts.reduce(function(a,b){return a+b;},0) : 0;
@@ -2023,33 +2056,43 @@ function removeGame(idx) {
 }
 
 function renderSeasonChart() {
-  var nplGames = games.filter(function(g){return g.comp==='NPL';}),
-      container = document.getElementById('season-bip-chart');
-  if (!nplGames.length) { container.innerHTML='<div style="color:#777;font-size:12px;padding:20px;">No NPL games loaded</div>'; return; }
+  var nplGames = games.filter(function(g){return g.comp==='NPL';});
+  var container = document.getElementById('season-bip-chart');
+  if (!nplGames.length) {
+    container.innerHTML = '<div style="color:#777;font-size:12px;padding:20px;">No NPL games loaded</div>';
+    return;
+  }
+
   var pcts = nplGames.map(function(g){
-    var bip=g.fg.bip.reduce(function(a,x){return a+x.s;},0), bop=g.fg.bop.reduce(function(a,x){return a+x.s;},0);
+    var bip=g.fg.bip.reduce(function(a,x){return a+x.s;},0),
+        bop=g.fg.bop.reduce(function(a,x){return a+x.s;},0);
     return bip+bop>0?(bip/(bip+bop))*100:0;
   });
+
   var b=computeBenchmarks(), BENCH=b&&b[0]?b[0].bip_pct:62.5;
-  var allVals = pcts.concat([BENCH]);
+  var allVals=pcts.concat([BENCH]);
   var minP=Math.min.apply(null,allVals), maxP=Math.max.apply(null,allVals);
-  var axMin=Math.floor((minP-5)/5)*5, axMax=Math.ceil((maxP+2)/5)*5, axR=axMax-axMin, BAR_H=180;
+  var axMin=Math.floor((minP-5)/5)*5, axMax=Math.ceil((maxP+2)/5)*5, axR=axMax-axMin;
+  var BAR_H=180;
+  // p2h: percentage → pixel height from bottom
   function p2h(p){return Math.max(0,Math.round(((p-axMin)/axR)*BAR_H));}
-  function rollingAvg(arr, n) {
+
+  function rollingAvg(arr,n){
     return arr.map(function(_,i){
       var sl=arr.slice(Math.max(0,i-n+1),i+1);
       return sl.reduce(function(a,b){return a+b;},0)/sl.length;
     });
   }
-  var roll3  = pcts.length>=2 ? rollingAvg(pcts,3)  : null;
-  var roll5  = pcts.length>=3 ? rollingAvg(pcts,5)  : null;
-  var roll10 = pcts.length>=5 ? rollingAvg(pcts,10) : null;
+  var roll3  = pcts.length>=2?rollingAvg(pcts,3):null;
+  var roll5  = pcts.length>=3?rollingAvg(pcts,5):null;
+  var roll10 = pcts.length>=5?rollingAvg(pcts,10):null;
 
   // Quick stats
   var qs=document.getElementById('season-quick-stats');
   if(qs&&pcts.length){
     var avg=(pcts.reduce(function(a,b){return a+b;},0)/pcts.length).toFixed(1),
-        hi=Math.max.apply(null,pcts).toFixed(1), lo=Math.min.apply(null,pcts).toFixed(1), tr='';
+        hi=Math.max.apply(null,pcts).toFixed(1),
+        lo=Math.min.apply(null,pcts).toFixed(1), tr='';
     if(roll3&&pcts.length>=4){
       var last=roll3[roll3.length-1], pa=roll3.length>=4?roll3[roll3.length-4]:roll3[0];
       tr=last>pa+1?' <span style="color:#27AE60">&#8593;</span>':last<pa-1?' <span style="color:#E74C3C">&#8595;</span>':' <span style="color:#C8A951">&#8594;</span>';
@@ -2059,49 +2102,36 @@ function renderSeasonChart() {
       +'<span>Low: <strong style="color:#C8A951">'+lo+'%</strong></span>'
       +'<span style="color:#333">|</span><span style="color:#555;">'+pcts.length+' games</span>';
   }
-  // Y-axis ticks
+
+  // Layout dimensions
+  var Y_AXIS_W  = 36;
+  var META_H    = 72; // logo + badge + date below bars
+  var containerW = container.offsetWidth || 800;
+  var chartW    = Math.max(containerW - Y_AXIS_W, nplGames.length * 56);
+  var n         = nplGames.length;
+  var BAR_SLOT  = Math.floor(chartW / n);
+  var BAR_GAP   = Math.max(4, Math.floor(BAR_SLOT * 0.12));
+  var BAR_W     = BAR_SLOT - BAR_GAP;
+
+  // Y-axis tick labels — positioned over the BAR_H zone only
   var tickStep=axR<=15?2:5, tHtml='';
   for(var t=axMin;t<=axMax;t+=tickStep){
-    var top=BAR_H-p2h(t), gc='#1A1A1A';
-    tHtml+='<div style="position:absolute;top:'+top+'px;left:0;right:0;display:flex;align-items:center;pointer-events:none;">'
-      +'<span style="font-size:10px;color:#555;width:28px;text-align:right;flex-shrink:0;line-height:1;">'+t+'%</span>'
-      +'<div style="flex:1;border-top:1px solid '+gc+';margin-left:4px;"></div></div>';
+    var topPx = BAR_H - p2h(t);
+    tHtml+='<div style="position:absolute;top:'+topPx+'px;left:0;width:'+Y_AXIS_W+'px;display:flex;align-items:center;justify-content:flex-end;pointer-events:none;">'
+      +'<span style="font-size:10px;color:#555;padding-right:5px;line-height:1;">'+t+'%</span>'
+      +'</div>';
   }
-  // Bar width in px (fixed per bar slot)
-  var BAR_SLOT = 56, BAR_W = 44, BAR_GAP = 8;
-  var totalW = nplGames.length * (BAR_SLOT + BAR_GAP);
 
-  // SVG rolling average lines overlay
-  function makeLine(rollArr, color, label) {
-    if (!rollArr || rollArr.length < 2) return '';
-    var pts = rollArr.map(function(v, i) {
-      var cx = i * (BAR_SLOT + BAR_GAP) + BAR_SLOT/2;
-      var cy = BAR_H - p2h(v);
-      return cx+','+cy;
-    });
-    var d = 'M ' + pts[0];
-    for (var i=1;i<pts.length;i++) {
-      var prev = pts[i-1].split(','), cur = pts[i].split(',');
-      var cpx = (parseFloat(prev[0])+parseFloat(cur[0]))/2;
-      d += ' C '+cpx+','+prev[1]+' '+cpx+','+cur[1]+' '+cur[0]+','+cur[1];
-    }
-    var lastPt = pts[pts.length-1].split(',');
-    return '<path d="'+d+'" fill="none" stroke="'+color+'" stroke-width="2" stroke-dasharray="5,3" opacity="0.85"/>'
-      +'<circle cx="'+lastPt[0]+'" cy="'+lastPt[1]+'" r="3" fill="'+color+'"/>'
-      +'<text x="'+(parseFloat(lastPt[0])+6)+'" y="'+(parseFloat(lastPt[1])+4)+'" font-size="9" fill="'+color+'" font-weight="700">'+rollArr[rollArr.length-1].toFixed(1)+'%</text>';
-  }
-  var svgLines = '<svg style="position:absolute;left:0;top:0;width:'+totalW+'px;height:'+BAR_H+'px;overflow:visible;pointer-events:none;z-index:4;">'
-    + makeLine(roll3,  '#3498DB', '3-game')
-    + makeLine(roll5,  '#9B59B6', '5-game')
-    + makeLine(roll10, '#E67E22', '10-game')
-    + '</svg>';
-
-  // Ref line
+  // NPL avg reference line — now black/dark with solid label
   var rH=p2h(BENCH), rTop=BAR_H-rH;
-  var refLine='<div style="position:absolute;left:0;right:0;top:'+rTop+'px;border-top:2px dashed rgba(255,255,255,0.4);pointer-events:none;z-index:3;">'
-    +'<span style="position:absolute;left:4px;top:-15px;font-size:11px;font-weight:700;color:rgba(255,255,255,0.55);letter-spacing:0.5px;">NPL avg: '+BENCH+'%</span></div>';
-  // Bars
-  var bHtml='';
+  var refLine='<div style="position:absolute;left:0;right:0;top:'+rTop+'px;border-top:2px dashed rgba(0,0,0,0.7);pointer-events:none;z-index:3;">'
+    +'<span style="position:absolute;left:4px;top:-16px;font-size:11px;font-weight:700;color:rgba(0,0,0,0.8);background:rgba(255,255,255,0.15);padding:1px 5px;border-radius:2px;">NPL avg: '+BENCH+'%</span>'
+    +'</div>';
+
+  // NO trend line SVG — lines removed, only values in legend below
+
+  // Bar row — ONLY bar divs, all height:BAR_H, no meta inside
+  var barRow='', metaRow='';
   nplGames.forEach(function(g,gi){
     var pct=pcts[gi], barH=p2h(pct),
         col=pct>=BENCH?'#27AE60':pct>=BENCH-10?'#C8A951':'#4A5568',
@@ -2110,36 +2140,64 @@ function renderSeasonChart() {
         locCol=g.location==='HOME'?'#27AE60':'#C8A951',
         locTxt=g.location==='HOME'?'H':'A',
         shortDate=g.date.slice(0,5),
-        logoEl=nameDisplayMode==='logo'&&logo
-          ?'<img src="'+logo+'" style="width:32px;height:32px;object-fit:contain;" title="'+g.opponent+'" />'
-          :'<span style="font-size:9px;color:#777;text-align:center;line-height:1.2;max-width:56px;display:block;">'+g.opponent.replace(' FC','').replace(' FA','')+'</span>',
-        lblBot=barH>24?'4px':String(barH+3)+'px',
-        lblCol=barH>24?'rgba(255,255,255,0.92)':col,
-        pctLbl='<div style="position:absolute;bottom:'+lblBot+';left:0;right:0;text-align:center;font-weight:700;font-size:12px;color:'+lblCol+';line-height:1;">'+pct.toFixed(0)+'%</div>';
-    bHtml+='<div style="display:flex;flex-direction:column;align-items:center;gap:0;flex-shrink:0;width:'+BAR_SLOT+'px;" title="'+g.opponent+' ('+g.location+'): '+pct.toFixed(1)+'% BIP">'
-      +'<div style="position:relative;width:'+BAR_W+'px;height:'+BAR_H+'px;flex-shrink:0;">'
+        lblBot=barH>24?'4px':String(barH+4)+'px',
+        lblCol=barH>24?'rgba(255,255,255,0.93)':col;
+
+    // Bar cell — exactly BAR_H tall, flex:1 wide
+    barRow+='<div style="flex:1;min-width:0;display:flex;justify-content:center;" title="'+g.opponent+' ('+g.location+'): '+pct.toFixed(1)+'% BIP">'
+      +'<div style="position:relative;width:'+BAR_W+'px;height:'+BAR_H+'px;">'
       +'<div style="position:absolute;bottom:0;left:0;right:0;height:'+barH+'px;background:'+col+';border-radius:3px 3px 0 0;"></div>'
-      +pctLbl+'</div>'
-      +'<div style="display:flex;flex-direction:column;align-items:center;gap:3px;margin-top:6px;">'
+      +'<div style="position:absolute;bottom:'+lblBot+';left:0;right:0;text-align:center;font-weight:700;font-size:12px;color:'+lblCol+';line-height:1;">'+pct.toFixed(0)+'%</div>'
+      +'</div>'
+      +'</div>';
+
+    // Meta cell — logo, H/A, date — same width as bar cell
+    var logoEl=logo
+      ?'<img src="'+logo+'" style="width:30px;height:30px;object-fit:contain;" title="'+g.opponent+'" />'
+      :'<span style="font-size:9px;color:#777;text-align:center;line-height:1.2;">'+g.opponent.replace(' FC','').replace(' FA','')+'</span>';
+    metaRow+='<div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:3px;padding-top:6px;">'
       +logoEl
       +'<span style="font-size:9px;padding:1px 5px;border-radius:2px;background:'+locBg+';color:'+locCol+';font-weight:700;">'+locTxt+'</span>'
-      +'<span style="font-size:9px;color:#555;text-align:center;line-height:1.2;">'+shortDate+'</span>'
-      +'</div></div>';
+      +'<span style="font-size:9px;color:#555;line-height:1.2;">'+shortDate+'</span>'
+      +'</div>';
   });
 
-  // Legend for trend lines
-  var trendLegend = '<div style="display:flex;gap:16px;margin-top:8px;font-size:10px;color:#777;">';
-  if(roll3)  trendLegend+='<span style="display:flex;align-items:center;gap:4px;"><svg width="18" height="8"><path d="M0,4 L18,4" stroke="#3498DB" stroke-width="2" stroke-dasharray="4,2"/></svg>3-game avg</span>';
-  if(roll5)  trendLegend+='<span style="display:flex;align-items:center;gap:4px;"><svg width="18" height="8"><path d="M0,4 L18,4" stroke="#9B59B6" stroke-width="2" stroke-dasharray="4,2"/></svg>5-game avg</span>';
-  if(roll10) trendLegend+='<span style="display:flex;align-items:center;gap:4px;"><svg width="18" height="8"><path d="M0,4 L18,4" stroke="#E67E22" stroke-width="2" stroke-dasharray="4,2"/></svg>10-game avg</span>';
-  trendLegend+='</div>';
+  // Legend — rolling average values only (no lines in chart)
+  function rollPill(color, label, val) {
+    return '<span style="display:flex;align-items:center;gap:5px;">'
+      +'<svg width="18" height="8"><path d="M0,4 L18,4" stroke="'+color+'" stroke-width="2" stroke-dasharray="4,2"/></svg>'
+      +label
+      +'<span style="background:'+color+';color:#111;font-weight:800;font-size:10px;padding:1px 5px;border-radius:3px;line-height:1.5;">'+val.toFixed(1)+'%</span>'
+      +'</span>';
+  }
+  var legendLine1='<div style="display:flex;gap:16px;margin-top:10px;font-size:10px;color:#777;flex-wrap:wrap;">';
+  if(roll3)  legendLine1+=rollPill('#00D4FF','3-game avg',roll3[roll3.length-1]);
+  if(roll5)  legendLine1+=rollPill('#FF6B9D','5-game avg',roll5[roll5.length-1]);
+  if(roll10) legendLine1+=rollPill('#FFD700','10-game avg',roll10[roll10.length-1]);
+  legendLine1+='</div>';
 
-  container.innerHTML='<div style="display:flex;gap:0;align-items:flex-start;width:100%;">'
-    +'<div style="position:relative;height:'+BAR_H+'px;width:32px;flex-shrink:0;">'+tHtml+'</div>'
-    +'<div style="flex:1;overflow-x:auto;padding-bottom:4px;">'
-    +'<div style="position:relative;display:inline-flex;align-items:flex-end;gap:'+BAR_GAP+'px;min-height:'+BAR_H+'px;padding:0 4px;">'
-    +refLine+svgLines+bHtml+'</div></div></div>'
-    +trendLegend;
+  // Assemble
+  container.innerHTML=
+    '<div style="position:relative;width:100%;">'
+    // Y-axis labels overlay — only covers bar zone height
+    +'<div style="position:absolute;left:0;top:0;width:'+Y_AXIS_W+'px;height:'+BAR_H+'px;pointer-events:none;z-index:2;">'+tHtml+'</div>'
+    // Chart area — bars + ref line, no SVG trend lines
+    +'<div style="position:relative;margin-left:'+Y_AXIS_W+'px;">'
+    +'<div style="position:relative;height:'+BAR_H+'px;">'
+    +refLine
+    +'<div style="position:absolute;left:0;right:0;top:0;bottom:0;display:flex;align-items:flex-end;">'+barRow+'</div>'
+    +'</div>'
+    // Meta row below bars, same flex layout
+    +'<div style="display:flex;">'+metaRow+'</div>'
+    +'</div>'
+    +'</div>'
+    +legendLine1;
+
+  // Re-render on resize
+  if (!container._resizeObserver) {
+    container._resizeObserver = new ResizeObserver(function(){ renderSeasonChart(); });
+    container._resizeObserver.observe(container);
+  }
 }
 
 // ========== INIT ==========
@@ -2163,8 +2221,8 @@ try { loadFromStorage(); } catch(e) {}
     <span id="cal-week-label" style="font-weight:700;font-size:16px;color:var(--text);min-width:180px;text-align:center;"></span>
     <button onclick="nextWeek()" style="padding:7px 14px;background:var(--panel2);border:1px solid var(--border);color:var(--muted);font-weight:700;font-size:13px;cursor:pointer;border-radius:3px;">&#8594;</button>
     <div style="margin-left:auto;display:flex;align-items:center;gap:10px;">
-      <span style="font-size:12px;color:var(--muted);">Sessions are saved from the Session Audit tab</span>
-      <button onclick="exportWeekCSV()" style="padding:6px 12px;background:var(--panel2);border:1px solid var(--border);color:#777;font-size:11px;font-weight:700;cursor:pointer;border-radius:3px;white-space:nowrap;letter-spacing:1px;">&#8595; CSV</button>
+      <span style="font-size:12px;color:var(--muted);">Sessions saved from Session Audit tab</span>
+      <button onclick="exportWeekCSV()" style="padding:6px 12px;background:var(--panel2);border:1px solid var(--border);color:#777;font-size:11px;font-weight:700;cursor:pointer;border-radius:3px;letter-spacing:1px;">&#8595; CSV</button>
     </div>
   </div>
   <div id="cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-bottom:20px;"></div>
@@ -2186,9 +2244,9 @@ try { loadFromStorage(); } catch(e) {}
     <select id="library-type-filter" onchange="filterLibrary()"
       style="background:var(--panel2);border:1px solid var(--border);color:var(--text);padding:8px 12px;font-size:13px;border-radius:3px;outline:none;">
       <option value="">All types</option>
-      <option value="TYPE B">Type B — Match-Approximate</option>
-      <option value="TYPE A">Type A — Intensity Overload</option>
-      <option value="TYPE C">Type C — Volume/Structure</option>
+      <option value="TYPE B">Type B &mdash; Match-Approximate</option>
+      <option value="TYPE A">Type A &mdash; Intensity Overload</option>
+      <option value="TYPE C">Type C &mdash; Volume/Structure</option>
     </select>
     <span id="library-count" style="font-size:12px;color:var(--muted);margin-left:4px;"></span>
     <div style="margin-left:auto;display:flex;gap:8px;">
