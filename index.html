@@ -259,28 +259,26 @@
 
   <div class="divider"></div>
 
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;">
-    <div>
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+  <div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
       <h3 class="sub-heading" style="margin-bottom:0;">Season BIP % by Game</h3>
       <div id="season-quick-stats" style="display:flex;gap:16px;font-size:12px;color:var(--muted);"></div>
-        
+    </div>
+    <div class="card">
+      <div class="season-chart-wrap">
+        <div id="season-bip-chart" style="width:100%;"></div>
+      </div>
+      <div style="margin-top:8px;font-size:10px;color:var(--muted);display:flex;gap:16px;">
+        <span style="display:flex;align-items:center;gap:5px;"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#27AE60;"></span>At/above avg</span>
+        <span style="display:flex;align-items:center;gap:5px;"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#C8A951;"></span>Within 10%</span>
+        <span style="display:flex;align-items:center;gap:5px;"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#4A5568;"></span>Below</span>
+        <span style="display:flex;align-items:center;gap:5px;"><span style="display:inline-block;width:18px;border-top:2px dashed rgba(255,255,255,0.35);"></span>NPL avg (dashed)</span>
       </div>
     </div>
-      <div class="card">
-        <div class="season-chart-wrap">
-          <div id="season-bip-chart" style="width:100%;"></div>
-        </div>
-        <div style="margin-top:8px;font-size:10px;color:var(--muted);display:flex;gap:16px;">
-          <span style="display:flex;align-items:center;gap:5px;"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#27AE60;"></span>At/above avg</span>
-          <span style="display:flex;align-items:center;gap:5px;"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#C8A951;"></span>Within 10%</span>
-          <span style="display:flex;align-items:center;gap:5px;"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#4A5568;"></span>Below</span>
-          <span style="display:flex;align-items:center;gap:5px;"><span style="display:inline-block;width:18px;border-top:2px dashed rgba(255,255,255,0.35);"></span>NPL avg (dashed)</span>
-        </div>
-      </div>
-    </div>
-    <div>
-      <h3 class="sub-heading">Loaded Games</h3>
+  </div>
+
+  <div>
+    <h3 class="sub-heading">Loaded Games</h3>
       <div class="card" style="padding:0;">
         <table class="game-table">
           <thead><tr>
@@ -291,8 +289,6 @@
         <div id="game-list-empty" class="empty-state" style="display:none;">No games loaded. Upload CSVs to begin.</div>
       </div>
       <div id="home-away-split" style="margin-top:12px;"></div>
-      </div>
-    </div>
   </div>
 </div>
 
@@ -2125,7 +2121,7 @@ function renderSeasonChart() {
   // NPL avg reference line — now black/dark with solid label
   var rH=p2h(BENCH), rTop=BAR_H-rH;
   var refLine='<div style="position:absolute;left:0;right:0;top:'+rTop+'px;border-top:2px dashed rgba(0,0,0,0.7);pointer-events:none;z-index:3;">'
-    +'<span style="position:absolute;left:4px;top:-16px;font-size:11px;font-weight:700;color:rgba(0,0,0,0.8);background:rgba(255,255,255,0.15);padding:1px 5px;border-radius:2px;">NPL avg: '+BENCH+'%</span>'
+    +'<span style="position:absolute;left:4px;top:-16px;font-size:11px;font-weight:700;color:#ffffff;background:rgba(0,0,0,0.4);padding:1px 5px;border-radius:2px;">NPL avg: '+BENCH+'%</span>'
     +'</div>';
 
   // NO trend line SVG — lines removed, only values in legend below
@@ -2286,6 +2282,3 @@ try { loadFromStorage(); } catch(e) {}
     </div>
   </div>
 </div>
-
-</body>
-</html>
