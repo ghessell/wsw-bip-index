@@ -1996,58 +1996,6 @@ function renderGameList() {
   if (games.length === 0) { tbody.innerHTML = ''; empty.style.display = 'block'; return; }
   empty.style.display = 'none';
   const sorted = [...games].sort((a,b) => a.date.split('/').reverse().join('') > b.date.split('/').reverse().join('') ? 1 : -1);
-  // Home/Away BIP split
-  const splitEl = document.getElementById('home-away-split');
-  if (splitEl) {
-    const nplG = games.filter(g=>g.comp==='NPL');
-    const hG = nplG.filter(g=>g.location==='HOME'), aG = nplG.filter(g=>g.location==='AWAY');
-    function avgB(gs) {
-      if (!gs.length) return null;
-      return (gs.map(g=>{ const b=g.fg.bip.reduce((a,x)=>a+x.s,0),p=g.fg.bop.reduce((a,x)=>a+x.s,0); return b+p>0?(b/(b+p))*100:0; }).reduce((a,v)=>a+v,0)/gs.length).toFixed(1);
-    }
-    const hP=avgB(hG), aP=avgB(aG);
-    const diff = hP&&aP ? (parseFloat(hP)-parseFloat(aP)).toFixed(1) : null;
-    const dCol = diff===null?'#777':parseFloat(diff)>0?'#27AE60':parseFloat(diff)<0?'#E74C3C':'#C8A951';
-    splitEl.innerHTML = nplG.length>0 ?
-      '<div style="display:flex;gap:12px;font-size:11px;padding:8px 12px;background:var(--panel2);border:1px solid var(--border);border-radius:3px;">'
-      +'<span style="color:#777;letter-spacing:1px;text-transform:uppercase;font-size:10px;align-self:center;">H/A Split:</span>'
-      +'<span style="color:#27AE60"><strong>H '+(hP||'—')+'%</strong> ('+hG.length+'g)</span>'
-      +'<span style="color:#C8A951"><strong>A '+(aP||'—')+'%</strong> ('+aG.length+'g)</span>'
-      +(diff!==null?'<span style="color:'+dCol+'">'+(parseFloat(diff)>0?'+':'')+diff+'% home</span>':'')
-      +'</div>' : '';
-  }
-  tbody.innerHTML = sorted.map((g, i) => {
-    const realIdx = games.indexOf(g);
-    const bipTotal = g.fg.bip.reduce((a,x)=>a+x.s,0);
-    const bopTotal = g.fg.bop.reduce((a,x)=>a+x.s,0);
-    const bipPct = bipTotal+bopTotal>0 ? ((bipTotal/(bipTotal+bopTotal))*100).toFixed(1) : '—';
-    const midpoints = {"0-15s":7.5,"15-30s":22.5,"30-60s":45,"60-90s":75,"90-120s":105,"120-150s":135,"150-200s":175,"200+s":230};
-    let wsum=0,cnt=0;
-    g.fg.bop.forEach(row => { wsum += row.c * (midpoints[row.b]||0); cnt += row.c; });
-    const medBOP = cnt>0 ? Math.round(wsum/cnt) : '—';
-    const fastRestartCount = g.fg.bop.filter(r=>r.b==='0-15s').reduce((a,r)=>a+r.c,0); // ≤10s = fast restart (within 0-15s bin)
-    const totalBopCount = g.fg.bop.reduce((a,r)=>a+r.c,0);
-    const fastPct = totalBopCount>0 ? Math.round((fastRestartCount/totalBopCount)*100) : 0;
-    const fastCol = fastPct>=30 ? '#27AE60' : fastPct>=15 ? '#C8A951' : '#777';
-    const gLogo = getTeamLogo(g.opponent);
-    const gName = g.opponent.replace(' FC','').replace(' FA','');
-    const logoCell = nameDisplayMode==='logo' && gLogo ? '<img src="'+gLogo+'" style="height:22px;width:22px;object-fit:contain;vertical-align:middle;margin-right:6px;border-radius:50%;">'+gName : g.opponent;
-    const compCls = g.comp==='NPL' ? 'comp-npl' : 'comp-20s';
-    const locCls = g.location==='HOME' ? 'loc-h' : 'loc-a';
-    const locTxt = g.location==='HOME' ? 'H' : 'A';
-    const row = '<tr>'
-      + '<td style="font-weight:500;">'+logoCell+'</td>'
-      + '<td style="color:#777">'+g.date+'</td>'
-      + '<td><span class="comp-badge '+compCls+'">'+g.comp+'</span></td>'
-      + '<td><span class="loc-badge '+locCls+'">'+locTxt+'</span></td>'
-      + '<td style="font-weight:700;color:var(--red-light)">'+bipPct+'%</td>'
-      + '<td style="color:#777">'+medBOP+'s</td>'
-      + '<td style="color:'+fastCol+'">'+fastPct+'%</td>'
-      + '<td><button class="remove-game" onclick="removeGame('+realIdx+')">&#x2715;</button></td>'
-      + '</tr>';
-    return row;
-  }).join('');
-}
 
 function removeGame(idx) {
   games.splice(idx, 1);
@@ -2127,8 +2075,6 @@ function renderSeasonChart() {
   var refLine='<div style="position:absolute;left:0;right:0;top:'+rTop+'px;border-top:2px dashed rgba(0,0,0,0.7);pointer-events:none;z-index:3;">'
     +'<span style="position:absolute;left:4px;top:-16px;font-size:11px;font-weight:700;color:rgba(0,0,0,0.8);background:rgba(255,255,255,0.15);padding:1px 5px;border-radius:2px;">NPL avg: '+BENCH+'%</span>'
     +'</div>';
-
-  // NO trend line SVG — lines removed, only values in legend below
 
   // Bar row — ONLY bar divs, all height:BAR_H, no meta inside
   var barRow='', metaRow='';
@@ -2266,25 +2212,6 @@ try { loadFromStorage(); } catch(e) {}
   <div id="drill-library-list"></div>
   <div class="divider"></div>
   <div class="info-note">Score a drill in the <strong>Drill Audit</strong> tab, then click <strong>Save to Library</strong>. Click <strong>Load</strong> on any saved drill to pre-fill the audit form for re-scoring.</div>
-</div>
-
-<!-- PDF EXPORT MODAL -->
-<div class="modal-overlay" id="pdf-modal">
-  <div class="modal">
-    <div class="modal-title">Export PDF Report</div>
-    <div class="modal-sub">Select sections to include</div>
-    <div style="display:flex;flex-direction:column;gap:10px;margin:16px 0;">
-      <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;"><input type="checkbox" id="pdf-benchmarks" checked style="width:16px;height:16px;accent-color:var(--red);" />Match Benchmarks Summary</label>
-      <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;"><input type="checkbox" id="pdf-season" checked style="width:16px;height:16px;accent-color:var(--red);" />Season BIP% Per Game</label>
-      <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;"><input type="checkbox" id="pdf-gamelist" checked style="width:16px;height:16px;accent-color:var(--red);" />Game Log Table</label>
-      <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;"><input type="checkbox" id="pdf-session" style="width:16px;height:16px;accent-color:var(--red);" />Current Session Audit</label>
-      <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;"><input type="checkbox" id="pdf-week" style="width:16px;height:16px;accent-color:var(--red);" />Week Audit Summary</label>
-    </div>
-    <div class="modal-actions">
-      <button class="modal-cancel" onclick="document.getElementById('pdf-modal').classList.remove('open')">Cancel</button>
-      <button class="modal-confirm" onclick="exportPDF()">GENERATE PDF</button>
-    </div>
-  </div>
 </div>
 
 </body>
