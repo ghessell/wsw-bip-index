@@ -402,12 +402,20 @@
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
               <div>
+                <label class="input-label">Total Distance (meters)</label>
+                <input type="number" id="drill-totaldist" placeholder="e.g. 2400" min="0" step="1" />
+              </div>
+              <div>
                 <label class="input-label">HSR >5.5m/s (meters)</label>
                 <input type="number" id="drill-hsr" placeholder="e.g. 245" min="0" step="1" />
               </div>
               <div>
                 <label class="input-label">HMLD >25.5w/kg</label>
                 <input type="number" id="drill-hmld" placeholder="e.g. 850" min="0" step="1" />
+              </div>
+              <div>
+                <label class="input-label">Max Velocity (m/s)</label>
+                <input type="number" id="drill-maxvel" placeholder="e.g. 8.5" min="0" step="0.01" />
               </div>
               <div>
                 <label class="input-label">Intense Accels >2.5m/s²</label>
@@ -1310,18 +1318,20 @@ function calculateScore() {
   if(!duration||!bipMins||!medBOP||!totalBinCount){alert('Please fill in all fields including at least one bin count.');return;}
   
   // Read GPS inputs (optional)
+  const gpsTotalDist = parseFloat(document.getElementById('drill-totaldist').value) || 0;
   const gpsHSR = parseFloat(document.getElementById('drill-hsr').value) || 0;
   const gpsHMLD = parseFloat(document.getElementById('drill-hmld').value) || 0;
+  const gpsMaxVel = parseFloat(document.getElementById('drill-maxvel').value) || 0;
   const gpsAccels = parseFloat(document.getElementById('drill-accels').value) || 0;
   const gpsDecels = parseFloat(document.getElementById('drill-decels').value) || 0;
   const gpsBenchmarkIdx = parseInt(document.getElementById('gps-benchmark-select').value);
   
-  const hasGPSData = gpsHSR > 0 || gpsHMLD > 0 || gpsAccels > 0 || gpsDecels > 0;
+  const hasGPSData = gpsTotalDist > 0 || gpsHSR > 0 || gpsHMLD > 0 || gpsAccels > 0 || gpsDecels > 0 || gpsMaxVel > 0;
   let gpsData = null;
   let gmiResult = null;
   
   if (hasGPSData && !isNaN(gpsBenchmarkIdx) && matchGPSBenchmarks.history[gpsBenchmarkIdx]) {
-    gpsData = {hsr: gpsHSR, hmld: gpsHMLD, accels: gpsAccels, decels: gpsDecels};
+    gpsData = {totalDist: gpsTotalDist, hsr: gpsHSR, hmld: gpsHMLD, maxVel: gpsMaxVel, accels: gpsAccels, decels: gpsDecels};
     gmiResult = calculateGMI(gpsData, duration, matchGPSBenchmarks.history[gpsBenchmarkIdx]);
   }
   
@@ -1371,8 +1381,12 @@ function calculateScore() {
     const iconCol = (pct) => pct >= 90 && pct <= 110 ? '#27AE60' : pct > 110 ? '#E67E22' : '#777';
     out+=`<div class="card" style="margin-bottom:14px;border-left:3px solid #3498DB;"><div class="card-title">GPS Match Comparison</div>`;
     out+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px;">`;
+    out+=`<div style="padding:8px;background:var(--panel2);border-radius:3px;"><div style="color:#777;margin-bottom:4px;">Total Dist/min</div><div style="font-weight:700;">${c.totalDist.drill} vs ${c.totalDist.match} m <span style="color:${iconCol(c.totalDist.pct)}">(${c.totalDist.pct}%) ${icon(c.totalDist.pct)}</span></div></div>`;
     out+=`<div style="padding:8px;background:var(--panel2);border-radius:3px;"><div style="color:#777;margin-bottom:4px;">HSR/min</div><div style="font-weight:700;">${c.hsr.drill} vs ${c.hsr.match} <span style="color:${iconCol(c.hsr.pct)}">(${c.hsr.pct}%) ${icon(c.hsr.pct)}</span></div></div>`;
     out+=`<div style="padding:8px;background:var(--panel2);border-radius:3px;"><div style="color:#777;margin-bottom:4px;">HMLD/min</div><div style="font-weight:700;">${c.hmld.drill} vs ${c.hmld.match} <span style="color:${iconCol(c.hmld.pct)}">(${c.hmld.pct}%) ${icon(c.hmld.pct)}</span></div></div>`;
+    if (c.maxVel) {
+      out+=`<div style="padding:8px;background:var(--panel2);border-radius:3px;"><div style="color:#777;margin-bottom:4px;">Max Velocity</div><div style="font-weight:700;">${c.maxVel.drill} vs ${c.maxVel.match} m/s <span style="color:${iconCol(c.maxVel.pct)}">(${c.maxVel.pct}%) ${icon(c.maxVel.pct)}</span></div></div>`;
+    }
     out+=`<div style="padding:8px;background:var(--panel2);border-radius:3px;"><div style="color:#777;margin-bottom:4px;">Accels/min</div><div style="font-weight:700;">${c.accels.drill} vs ${c.accels.match} <span style="color:${iconCol(c.accels.pct)}">(${c.accels.pct}%) ${icon(c.accels.pct)}</span></div></div>`;
     out+=`<div style="padding:8px;background:var(--panel2);border-radius:3px;"><div style="color:#777;margin-bottom:4px;">Decels/min</div><div style="font-weight:700;">${c.decels.drill} vs ${c.decels.match} <span style="color:${iconCol(c.decels.pct)}">(${c.decels.pct}%) ${icon(c.decels.pct)}</span></div></div>`;
     out+=`</div></div>`;
@@ -1672,7 +1686,7 @@ function renderGPSStats(text, filename) {
   
   // Parse totals from "GAME TOTALS" section
   let totalDist = '—', totalHSR = '—', totalvHSR = '—', totalHMLD = '—', totalHMLDmin = '—';
-  let totalAccels = '—', totalDecels = '—';
+  let totalAccels = '—', totalDecels = '—', maxVelocity = '—';
   
   // Look for GAME TOTALS section
   const totalsSection = text.match(/GAME\s+TOTALS[\s\S]{0,500}?Total\s+Distance[^0-9]*(\d+)[^0-9]*HSR[^0-9]*(\d+)[^0-9]*vHSR[^0-9]*(\d+)/i);
@@ -1703,12 +1717,32 @@ function renderGPSStats(text, filename) {
   if (accelsMatch) totalAccels = accelsMatch[1];
   if (decelsMatch) totalDecels = decelsMatch[1];
   
+  // Extract max velocity from player data (team maximum)
+  // Look for MAX Velocity (m/s) column in player rows
+  const maxVelMatches = text.matchAll(/MAX\s+Velocity[^0-9]*(\d+\.?\d*)\s+m\/s/gi);
+  let teamMaxVel = 0;
+  for (const match of maxVelMatches) {
+    const vel = parseFloat(match[1]);
+    if (!isNaN(vel) && vel > teamMaxVel) teamMaxVel = vel;
+  }
+  // Alternative: look for individual player max velocities
+  if (teamMaxVel === 0) {
+    const velPattern = /\b(\d+\.?\d*)\s+3[0-3]\.\d+\s+[89]\d\.\d+%/g; // Pattern: m/s km/h %
+    const matches = text.matchAll(velPattern);
+    for (const match of matches) {
+      const vel = parseFloat(match[1]);
+      if (!isNaN(vel) && vel > teamMaxVel && vel < 15) teamMaxVel = vel; // Sanity check < 15 m/s
+    }
+  }
+  if (teamMaxVel > 0) maxVelocity = teamMaxVel.toFixed(2);
+  
   // Display summary stats
   const stats = [
     {label: 'Match Duration', val: gameMatch ? gameMatch[1] : '—', unit: ''},
     {label: 'Total Distance', val: totalDist, unit: 'm'},
     {label: 'HSR Distance', val: totalHSR, unit: 'm'},
     {label: 'vHSR Distance', val: totalvHSR, unit: 'm'},
+    {label: 'Max Velocity', val: maxVelocity, unit: 'm/s'},
     {label: 'HMLD', val: totalHMLD, unit: ''},
     {label: 'HMLD/MIN', val: totalHMLDmin, unit: ''},
     {label: 'Intense Accels', val: totalAccels, unit: ''},
@@ -1828,10 +1862,12 @@ function renderGPSStats(text, filename) {
       opponent: opponent || 'Unknown',
       filename: filename,
       duration: durationMins,
+      total_dist_per_min: parseFloat(totalDist) / durationMins,
       hsr_per_min: parseFloat(totalHSR) / durationMins,
       hmld_per_min: parseFloat(totalHMLD) / durationMins,
       accels_per_min: parseFloat(totalAccels) / durationMins,
-      decels_per_min: parseFloat(totalDecels) / durationMins
+      decels_per_min: parseFloat(totalDecels) / durationMins,
+      max_velocity: maxVelocity !== '—' ? parseFloat(maxVelocity) : null
     };
     
     // Update latest and add to history
@@ -1875,37 +1911,65 @@ function calculateGMI(drillGPS, drillDuration, benchmark) {
   if (!drillGPS || !benchmark || !drillDuration || drillDuration === 0) return null;
   
   // Calculate drill per-minute values
+  const drillTotalDistpm = drillGPS.totalDist / drillDuration;
   const drillHSRpm = drillGPS.hsr / drillDuration;
   const drillHMLDpm = drillGPS.hmld / drillDuration;
   const drillAccelspm = drillGPS.accels / drillDuration;
   const drillDecelspm = drillGPS.decels / drillDuration;
+  const drillMaxVel = drillGPS.maxVel || 0;
   
   // Calculate similarity scores (0-100 for each component)
   // Score = 100 - (|difference| / benchmark * 100), capped at 0-100
   function similarity(drillVal, benchVal) {
-    if (benchVal === 0) return drillVal === 0 ? 100 : 0;
+    if (benchVal === 0 || benchVal === null) return drillVal === 0 ? 100 : 0;
     const diff = Math.abs(drillVal - benchVal);
     const pctDiff = (diff / benchVal) * 100;
     return Math.max(0, Math.min(100, 100 - pctDiff));
   }
   
+  const totalDistScore = similarity(drillTotalDistpm, benchmark.total_dist_per_min);
   const hsrScore = similarity(drillHSRpm, benchmark.hsr_per_min);
   const hmldScore = similarity(drillHMLDpm, benchmark.hmld_per_min);
   const accelsScore = similarity(drillAccelspm, benchmark.accels_per_min);
   const decelsScore = similarity(drillDecelspm, benchmark.decels_per_min);
   
-  // Overall GMI (equal weighting: 25% each)
-  const gmi = Math.round((hsrScore + hmldScore + accelsScore + decelsScore) / 4);
+  // Max velocity comparison (absolute value, not per-minute)
+  const hasMaxVel = drillMaxVel > 0 && benchmark.max_velocity && benchmark.max_velocity > 0;
+  const maxVelScore = hasMaxVel ? similarity(drillMaxVel, benchmark.max_velocity) : null;
   
-  return {
-    gmi,
-    components: {
-      hsr: {score: Math.round(hsrScore), drill: drillHSRpm.toFixed(1), match: benchmark.hsr_per_min.toFixed(1), pct: (drillHSRpm/benchmark.hsr_per_min*100).toFixed(0)},
-      hmld: {score: Math.round(hmldScore), drill: drillHMLDpm.toFixed(1), match: benchmark.hmld_per_min.toFixed(1), pct: (drillHMLDpm/benchmark.hmld_per_min*100).toFixed(0)},
-      accels: {score: Math.round(accelsScore), drill: drillAccelspm.toFixed(1), match: benchmark.accels_per_min.toFixed(1), pct: (drillAccelspm/benchmark.accels_per_min*100).toFixed(0)},
-      decels: {score: Math.round(decelsScore), drill: drillDecelspm.toFixed(1), match: benchmark.decels_per_min.toFixed(1), pct: (drillDecelspm/benchmark.decels_per_min*100).toFixed(0)}
-    }
+  // Overall GMI - adaptive weighting based on available components
+  // 6 components (all GPS data): ~16.67% each
+  // 5 components (no max vel): 20% each
+  // 4 components (original): 25% each
+  let gmi;
+  let numComponents = 5; // totalDist, HSR, HMLD, Accels, Decels
+  
+  if (hasMaxVel) {
+    numComponents = 6;
+    gmi = Math.round((totalDistScore + hsrScore + hmldScore + maxVelScore + accelsScore + decelsScore) / 6);
+  } else {
+    gmi = Math.round((totalDistScore + hsrScore + hmldScore + accelsScore + decelsScore) / 5);
+  }
+  
+  const components = {
+    totalDist: {score: Math.round(totalDistScore), drill: drillTotalDistpm.toFixed(0), match: benchmark.total_dist_per_min.toFixed(0), pct: (drillTotalDistpm/benchmark.total_dist_per_min*100).toFixed(0)},
+    hsr: {score: Math.round(hsrScore), drill: drillHSRpm.toFixed(1), match: benchmark.hsr_per_min.toFixed(1), pct: (drillHSRpm/benchmark.hsr_per_min*100).toFixed(0)},
+    hmld: {score: Math.round(hmldScore), drill: drillHMLDpm.toFixed(1), match: benchmark.hmld_per_min.toFixed(1), pct: (drillHMLDpm/benchmark.hmld_per_min*100).toFixed(0)},
+    accels: {score: Math.round(accelsScore), drill: drillAccelspm.toFixed(1), match: benchmark.accels_per_min.toFixed(1), pct: (drillAccelspm/benchmark.accels_per_min*100).toFixed(0)},
+    decels: {score: Math.round(decelsScore), drill: drillDecelspm.toFixed(1), match: benchmark.decels_per_min.toFixed(1), pct: (drillDecelspm/benchmark.decels_per_min*100).toFixed(0)}
   };
+  
+  // Add max velocity if available
+  if (hasMaxVel) {
+    components.maxVel = {
+      score: Math.round(maxVelScore), 
+      drill: drillMaxVel.toFixed(2), 
+      match: benchmark.max_velocity.toFixed(2), 
+      pct: (drillMaxVel/benchmark.max_velocity*100).toFixed(0)
+    };
+  }
+  
+  return {gmi, components};
 }
 
 // ========== PDF EXPORT ==========
