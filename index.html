@@ -1725,16 +1725,26 @@ function renderGPSStats(text, filename) {
     if (decelsMatch) totalDecels = decelsMatch[1];
   }
   
-  // Extract max velocity from player data (team maximum)
-  // STATSports format: "MAX Velocity (m/s)" column followed by value like "8.65" or "9.1"
-  const maxVelPattern = /MAX\s+Velocity[^0-9]*([\d.]+)(?:\s+\d{2}\.\d{2}\s+[\d.]+%)/gi;
-  let teamMaxVel = 0;
-  let match;
-  while ((match = maxVelPattern.exec(text)) !== null) {
-    const vel = parseFloat(match[1]);
-    if (!isNaN(vel) && vel > teamMaxVel && vel < 15) teamMaxVel = vel;
+  // Extract max velocity from STARTING XI players only (team average, not maximum)
+  // Look for pattern: player data before "SUBSTITUTES" line
+  const startingXISection = text.split(/SUBSTITUTES/i)[0];
+  const starterVelocities = [];
+  
+  // Pattern: player row with max velocity m/s value (column 5-6 typically)
+  // Example: "Abdul Rahman   100%   11788   1121   313   8.65   31.14   96.1%"
+  const velPattern = /\d+%\s+\d+\s+\d+\s+\d+\s+([\d.]+)\s+[\d.]+\s+[\d.]+%/g;
+  let velMatch;
+  while ((velMatch = velPattern.exec(startingXISection)) !== null) {
+    const vel = parseFloat(velMatch[1]);
+    if (!isNaN(vel) && vel > 5 && vel < 15) { // Sanity check: 5-15 m/s range
+      starterVelocities.push(vel);
+    }
   }
-  if (teamMaxVel > 0) maxVelocity = teamMaxVel.toFixed(2);
+  
+  if (starterVelocities.length > 0) {
+    const avgVel = starterVelocities.reduce((a,b) => a+b, 0) / starterVelocities.length;
+    maxVelocity = avgVel.toFixed(2);
+  }
   
   // Display summary stats
   const stats = [
@@ -1849,11 +1859,17 @@ function renderGPSStats(text, filename) {
     const matchDate = filename.match(/(\d{1,2})[._-](\d{1,2})[._-](\d{4})/);
     const opponent = filename.replace(/\.pdf$/i, '').replace(/_/g, ' ').replace(/NPL|RD\d+|copy/gi, '').trim();
     
-    // Calculate duration in minutes
+    // Calculate duration in decimal minutes
     let durationMins = 95; // default
     if (gameMatch) {
-      const parts = gameMatch[1].split(':');
-      durationMins = parseInt(parts[0]) + (parseInt(parts[1]) / 60);
+      const timeParts = gameMatch[1].split(':');
+      if (timeParts.length === 2) {
+        // Format: MM:SS (e.g., "98:47")
+        durationMins = parseInt(timeParts[0]) + (parseInt(timeParts[1]) / 60);
+      } else if (timeParts.length === 3) {
+        // Format: H:MM:SS (e.g., "1:38:47")
+        durationMins = (parseInt(timeParts[0]) * 60) + parseInt(timeParts[1]) + (parseInt(timeParts[2]) / 60);
+      }
     }
     
     // Calculate per-minute benchmarks
