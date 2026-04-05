@@ -1681,56 +1681,32 @@ function renderGPSStats(text, filename) {
   const statGrid=document.getElementById('gps-stat-grid');
   const playerTable=document.getElementById('gps-player-table');
   
-  // DEBUG: Show extracted text to help diagnose
-  console.log('=== GPS EXTRACTED TEXT (first 3000 chars) ===');
-  console.log(text.substring(0, 3000));
-  console.log('=== SEARCHING FOR GAME AVERAGES ===');
-  const gameAvgTest = text.match(/Game\s+Average[s]?.*$/im);
-  console.log('Game Average line:', gameAvgTest ? gameAvgTest[0] : 'NOT FOUND');
-  console.log('=== END DEBUG ===');
-  
   // Extract match header info (1st Half, 2nd Half, Game durations)
   const h1Match = text.match(/1st\s+Half[:\s]+(\d{1,2}:\d{2}(?::\d{2})?)/i);
   const h2Match = text.match(/2nd\s+Half[:\s]+(\d{1,2}:\d{2}(?::\d{2})?)/i);
   const gameMatch = text.match(/Game[:\s]+(\d{1,2}:\d{2}(?::\d{2})?)/i);
   
   // STATSports-specific extraction: Look for "Game Averages" row in summary table
-  // Format: "Game Averages 98:47 9732 587 102 1991.0 48 122 190"
-  const gameAvgPattern = /Game\s+Average[s]?\s+(\d{1,3}:\d{2})\s+(\d{4,5})\s+(\d{2,4})\s+(\d{1,3})\s+([\d.]+)\s+(\d{2,3})\s+(\d{2,4})\s+(\d{2,4})/i;
+  // Actual format from PDF extraction: "Game Averages  9732   587  102  1991.0  48   122  190  98:47"
+  // Order: Dist, HSR, vHSR, HMLD, HMLD/min, Accels, Decels, Duration
+  const gameAvgPattern = /Game\s+Averages?\s+(\d{4,5})\s+(\d{2,4})\s+(\d{1,3})\s+([\d.]+)\s+(\d{1,3})\s+(\d{2,4})\s+(\d{2,4})/i;
   const gameAvgMatch = text.match(gameAvgPattern);
   
   let totalDist = '—', totalHSR = '—', totalvHSR = '—', totalHMLD = '—', totalHMLDmin = '—';
   let totalAccels = '—', totalDecels = '—', maxVelocity = '—';
   
   if (gameAvgMatch) {
-    // Game Averages row found: duration, dist, HSR, vHSR, HMLD, HMLD/min, Accels, Decels
-    totalDist = gameAvgMatch[2];
-    totalHSR = gameAvgMatch[3];
-    totalvHSR = gameAvgMatch[4];
-    totalHMLD = gameAvgMatch[5];
-    totalHMLDmin = gameAvgMatch[6];
-    totalAccels = gameAvgMatch[7];
-    totalDecels = gameAvgMatch[8];
+    // Game Averages row found
+    totalDist = gameAvgMatch[1];      // 9732
+    totalHSR = gameAvgMatch[2];       // 587
+    totalvHSR = gameAvgMatch[3];      // 102
+    totalHMLD = gameAvgMatch[4];      // 1991.0
+    totalHMLDmin = gameAvgMatch[5];   // 48
+    totalAccels = gameAvgMatch[6];    // 122
+    totalDecels = gameAvgMatch[7];    // 190
   }
   
-  // Robust fallback: Extract from labeled rows in summary table
-  // Look for table with headers: Period, Duration, Total Distance, HSR, vHSR, HMLD, etc
-  if (totalDist === '—') {
-    // Try to find Game row or Game Averages row in table
-    const tablePattern = /(?:Game|Game\s+Averages?)\s+(\d{1,3}:\d{2}|\d{2,3}:\d{2})\s+(\d{4,5})\s+(\d{2,4})\s+(\d{1,3})\s+([\d.]+)\s+(\d{1,3})\s+(\d{2,4})\s+(\d{2,4})/i;
-    const tableMatch = text.match(tablePattern);
-    if (tableMatch) {
-      totalDist = tableMatch[2];
-      totalHSR = tableMatch[3];
-      totalvHSR = tableMatch[4];
-      totalHMLD = tableMatch[5];
-      totalHMLDmin = tableMatch[6];
-      totalAccels = tableMatch[7];
-      totalDecels = tableMatch[8];
-    }
-  }
-  
-  // Final fallback: Look for individual labeled values in GAME TOTALS section
+  // Robust fallback: Look for individual labeled values if Game Averages failed
   if (totalDist === '—') {
     const distMatch = text.match(/Total\s+Distance[^\d]*(\d{4,5})/i);
     const hsrMatch = text.match(/HSR[^\d]*>5\.5m\/s[^\d]*(\d{2,4})/i);
@@ -1802,34 +1778,28 @@ function renderGPSStats(text, filename) {
     }
     
     // Extract player rows - STATSports format:
-    // "Abdul Rahman 100% 11788 1121 313 8.65 31.14 96.1% 2660 54 170 209"
+    // "Abdul Rahman   100%   11788   1121   313   8.65   31.14   96.1%   2660   54   170   209"
+    // Sometimes km/h is missing: "Sattout   59%   7121   599   157   9.1   99.1%   1466   53   79   102"
     if (inPlayerSection && line.length > 20) {
-      // Match: Name, %, distance, HSR, vHSR, max vel, etc
-      const parts = line.split(/\s+/);
-      if (parts.length >= 11) {
-        // First 1-2 parts are name, then numbers
-        let nameEnd = 0;
-        for (let j = 0; j < parts.length; j++) {
-          if (/^\d+%$/.test(parts[j])) {
-            nameEnd = j;
-            break;
-          }
-        }
-        if (nameEnd > 0) {
-          const name = parts.slice(0, nameEnd).join(' ');
-          const nums = parts.slice(nameEnd);
-          if (nums.length >= 10) {
-            playerRows.push({
-              name,
-              gamePct: nums[0],
-              dist: nums[1],
-              hsr: nums[2],
-              vhsr: nums[3],
-              hmld: nums[7] || '—',
-              accels: nums[9] || '—',
-              decels: nums[10] || '—',
-            });
-          }
+      // Split on multiple spaces to get columns
+      const parts = line.split(/\s{2,}/).map(p => p.trim());
+      
+      // First part is name, then look for percentage to confirm it's a player row
+      if (parts.length >= 8 && /%$/.test(parts[1])) {
+        const name = parts[0];
+        const nums = parts.slice(1).join(' ').split(/\s+/); // Re-split all remaining parts
+        
+        if (nums.length >= 10) {
+          playerRows.push({
+            name,
+            gamePct: nums[0],      // 100%
+            dist: nums[1],         // 11788
+            hsr: nums[2],          // 1121
+            vhsr: nums[3],         // 313
+            hmld: nums[7] || '—',  // 2660 (skip max vel columns)
+            accels: nums[9] || '—',   // 170
+            decels: nums[10] || '—',  // 209
+          });
         }
       }
     }
