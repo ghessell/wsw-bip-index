@@ -558,6 +558,26 @@
       <div class="archetype-examples">Possession games, 4v4+4, shape/unit work, 7v6 tactical</div>
     </div>
   </div>
+
+  <h3 class="sub-heading">BIP-Informed Programming Principles</h3>
+  <div class="ref-grid">
+    <div class="card">
+      <div class="card-title">Distribution Matters</div>
+      <p style="font-size:13px;line-height:1.7;color:#CCC;">Match BIP clusters in 15–60s bins. Drills with sustained 90s+ sequences score low on distribution similarity even if total BIP time is high. Break up long possessions to lift BPI.</p>
+    </div>
+    <div class="card">
+      <div class="card-title">Restart Pressure Is Key</div>
+      <p style="font-size:13px;line-height:1.7;color:#CCC;">NPL median BOP ≈ 22s. Drills with median BOP >45s will score low regardless of intensity. Fast restart (≤15s BOP) directly lifts BPI. Use ball placement and transition design.</p>
+    </div>
+    <div class="card">
+      <div class="card-title">Intensity ≠ Specificity</div>
+      <p style="font-size:13px;line-height:1.7;color:#CCC;">Type A drills (wave games, 1v1s) deliver high output but score low BPI due to long rest. Use strategically for neuromuscular stimulus, not match replication.</p>
+    </div>
+    <div class="card">
+      <div class="card-title">Context Over Score</div>
+      <p style="font-size:13px;line-height:1.7;color:#CCC;">A low BPI doesn't mean bad training. Tactical work (Type C) is essential. Use BPI to ensure adequate match-approximate load (Type B) across the week, not to eliminate all other formats.</p>
+    </div>
+  </div>
 </div>
 
 <!-- PDF EXPORT MODAL -->
@@ -947,10 +967,11 @@ function renderBarChart(container, nplGames, vals, BENCH, type, unit) {
     var shortDate=g.date.slice(0,5);
     var shortName=g.opponent.replace(' FC','').replace(' FA','').replace(' Stallions','').split(' ').slice(0,2).join(' ');
 
-    barRow+='<div style="flex:1;min-width:0;display:flex;justify-content:center;" title="'+g.opponent+' ('+g.location+'): '+val+unit+'">'
+    var displayVal = type==='bip' ? val.toFixed(1) : Math.round(val);
+    barRow+='<div style="flex:1;min-width:0;display:flex;justify-content:center;" title="'+g.opponent+' ('+g.location+'): '+(type==='bip'?val.toFixed(1):Math.round(val))+unit+'">'
       +'<div style="position:relative;width:'+BAR_W+'px;height:'+BAR_H+'px;">'
       +'<div style="position:absolute;bottom:0;left:0;right:0;height:'+barH+'px;background:'+col+';border-radius:3px 3px 0 0;"></div>'
-      +'<div style="position:absolute;bottom:'+lblBot+';left:0;right:0;text-align:center;font-weight:700;font-size:11px;color:'+lblCol+';line-height:1;">'+val+unit+'</div>'
+      +'<div style="position:absolute;bottom:'+lblBot+';left:0;right:0;text-align:center;font-weight:700;font-size:11px;color:'+lblCol+';line-height:1;">'+displayVal+unit+'</div>'
       +'</div>'
       +'</div>';
 
