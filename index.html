@@ -505,11 +505,6 @@
         <h3 class="sub-heading">Player Load Summary</h3>
         <div id="gps-player-table"></div>
       </div>
-      
-      <div style="margin-top:20px;" id="gps-history-panel">
-        <h3 class="sub-heading">GPS Benchmark History</h3>
-        <div id="gps-history-list" style="font-size:12px;"></div>
-      </div>
     </div>
   </div>
 </div>
@@ -1686,63 +1681,36 @@ function renderGPSStats(text, filename) {
   const h2Match = text.match(/2nd\s+Half[:\s]+(\d{1,2}:\d{2}(?::\d{2})?)/i);
   const gameMatch = text.match(/Game[:\s]+(\d{1,2}:\d{2}(?::\d{2})?)/i);
   
-  // STATSports-specific extraction: Look for "Game Averages" row in summary table
-  // Actual format from PDF extraction: "Game Averages  9732   587  102  1991.0  48   122  190  98:47"
+  // STATSports extraction: "Game Averages  9732   587  102  1991.0  48   122  190  98:47"
   // Order: Dist, HSR, vHSR, HMLD, HMLD/min, Accels, Decels, Duration
   const gameAvgPattern = /Game\s+Averages?\s+(\d{4,5})\s+(\d{2,4})\s+(\d{1,3})\s+([\d.]+)\s+(\d{1,3})\s+(\d{2,4})\s+(\d{2,4})/i;
   const gameAvgMatch = text.match(gameAvgPattern);
   
+  // Parse totals from "GAME TOTALS" section
   let totalDist = '—', totalHSR = '—', totalvHSR = '—', totalHMLD = '—', totalHMLDmin = '—';
   let totalAccels = '—', totalDecels = '—', maxVelocity = '—';
   
   if (gameAvgMatch) {
-    // Game Averages row found
-    totalDist = gameAvgMatch[1];      // 9732
-    totalHSR = gameAvgMatch[2];       // 587
-    totalvHSR = gameAvgMatch[3];      // 102
-    totalHMLD = gameAvgMatch[4];      // 1991.0
-    totalHMLDmin = gameAvgMatch[5];   // 48
-    totalAccels = gameAvgMatch[6];    // 122
-    totalDecels = gameAvgMatch[7];    // 190
+    totalDist = gameAvgMatch[1];
+    totalHSR = gameAvgMatch[2];
+    totalvHSR = gameAvgMatch[3];
+    totalHMLD = gameAvgMatch[4];
+    totalHMLDmin = gameAvgMatch[5];
+    totalAccels = gameAvgMatch[6];
+    totalDecels = gameAvgMatch[7];
   }
   
-  // Robust fallback: Look for individual labeled values if Game Averages failed
-  if (totalDist === '—') {
-    const distMatch = text.match(/Total\s+Distance[^\d]*(\d{4,5})/i);
-    const hsrMatch = text.match(/HSR[^\d]*>5\.5m\/s[^\d]*(\d{2,4})/i);
-    const vhsrMatch = text.match(/vHSR[^\d]*>7m\/s[^\d]*(\d{1,3})/i);
-    const hmldMatch = text.match(/HMLD[^\d]*>25\.5w\/kg[^\d]*([\d.]+)/i);
-    const hmldMinMatch = text.match(/HMLD\s*\/\s*MIN[^\d]*(\d{2,3})/i);
-    const accelsMatch = text.match(/Intense\s+Accels[^\d]*>2\.5[^\d]*(\d{2,4})/i);
-    const decelsMatch = text.match(/Intense\s+Decels[^\d]*>2\.5[^\d]*(\d{2,4})/i);
-    
-    if (distMatch) totalDist = distMatch[1];
-    if (hsrMatch) totalHSR = hsrMatch[1];
-    if (vhsrMatch) totalvHSR = vhsrMatch[1];
-    if (hmldMatch) totalHMLD = hmldMatch[1];
-    if (hmldMinMatch) totalHMLDmin = hmldMinMatch[1];
-    if (accelsMatch) totalAccels = accelsMatch[1];
-    if (decelsMatch) totalDecels = decelsMatch[1];
-  }
-  
-  // Extract max velocity from STARTING XI players only (team average, not maximum)
-  // Look for pattern: player data before "SUBSTITUTES" line
+  // Extract max velocity from STARTING XI only (team average)
   const startingXISection = text.split(/SUBSTITUTES/i)[0];
-  const starterVelocities = [];
-  
-  // Pattern: player row with max velocity m/s value (column 5-6 typically)
-  // Example: "Abdul Rahman   100%   11788   1121   313   8.65   31.14   96.1%"
+  const starterVels = [];
   const velPattern = /\d+%\s+\d+\s+\d+\s+\d+\s+([\d.]+)\s+[\d.]+\s+[\d.]+%/g;
   let velMatch;
   while ((velMatch = velPattern.exec(startingXISection)) !== null) {
     const vel = parseFloat(velMatch[1]);
-    if (!isNaN(vel) && vel > 5 && vel < 15) { // Sanity check: 5-15 m/s range
-      starterVelocities.push(vel);
-    }
+    if (!isNaN(vel) && vel > 5 && vel < 15) starterVels.push(vel);
   }
-  
-  if (starterVelocities.length > 0) {
-    const avgVel = starterVelocities.reduce((a,b) => a+b, 0) / starterVelocities.length;
+  if (starterVels.length > 0) {
+    const avgVel = starterVels.reduce((a,b) => a+b, 0) / starterVels.length;
     maxVelocity = avgVel.toFixed(2);
   }
   
@@ -1759,10 +1727,9 @@ function renderGPSStats(text, filename) {
     {label: 'Intense Decels', val: totalDecels, unit: ''},
   ];
   
-  statGrid.innerHTML = stats.map(s => {
-    const displayVal = s.val !== '—' && s.unit ? `${s.val} <span style="font-size:14px;font-weight:400;color:#777;">${s.unit}</span>` : s.val;
-    return `<div class="gps-stat-cell"><div class="gps-stat-val">${displayVal}</div><div class="gps-stat-lbl">${s.label}</div></div>`;
-  }).join('');
+  statGrid.innerHTML = stats.map(s => 
+    `<div class="gps-stat-cell"><div class="gps-stat-val">${s.val}${s.val!=='—'&&s.unit?' <span style="font-size:12px;font-weight:400;">${s.unit}</span>':''}</div><div class="gps-stat-lbl">${s.label}</div></div>`
+  ).join('');
   
   // Extract player table - look for STARTING XI section
   const lines = text.split('\n');
@@ -1770,45 +1737,46 @@ function renderGPSStats(text, filename) {
   let inPlayerSection = false;
   
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
+    const line = lines[i];
     
-    // Detect start of player table (STATSports uses "STARTING XI" header)
-    if (/STARTING\s+XI/i.test(line)) {
+    // Detect start of player table
+    if (/STARTING\s+XI|Player\s+Name.*Game\s*%/i.test(line)) {
       inPlayerSection = true;
       continue;
     }
     
     // Detect end of player section
-    if (inPlayerSection && (/SUBSTITUTES|HALF\s+COMPARISON|1st\s+Half/i.test(line))) {
+    if (inPlayerSection && (/SUBSTITUTES|HALF\s+COMPARISON|1st\s+Half.*2nd\s+Half/i.test(line) || line.trim() === '')) {
       if (/SUBSTITUTES/i.test(line)) {
-        continue; // Keep reading substitutes
+        // Continue into substitutes section
+        continue;
       } else {
-        break; // Stop at half comparison
+        break;
       }
     }
     
-    // Extract player rows - STATSports format:
-    // "Abdul Rahman   100%   11788   1121   313   8.65   31.14   96.1%   2660   54   170   209"
-    // Sometimes km/h is missing: "Sattout   59%   7121   599   157   9.1   99.1%   1466   53   79   102"
-    if (inPlayerSection && line.length > 20) {
-      // Split on multiple spaces to get columns
-      const parts = line.split(/\s{2,}/).map(p => p.trim());
-      
-      // First part is name, then look for percentage to confirm it's a player row
-      if (parts.length >= 8 && /%$/.test(parts[1])) {
-        const name = parts[0];
-        const nums = parts.slice(1).join(' ').split(/\s+/); // Re-split all remaining parts
-        
+    // Extract player rows (must have player name followed by numbers)
+    if (inPlayerSection) {
+      // Match pattern: Name (letters) followed by percentage and numbers
+      const playerMatch = line.match(/^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s+(\d+%)\s+(\d+)\s+(\d+)\s+(\d+)/);
+      if (playerMatch) {
+        const [, name, gamePct, dist, hsr, vhsr] = playerMatch;
+        // Extract remaining numbers from line
+        const nums = line.replace(name, '').trim().split(/\s+/).filter(s => /^[\d.%]+$/.test(s));
         if (nums.length >= 10) {
           playerRows.push({
             name,
-            gamePct: nums[0],      // 100%
-            dist: nums[1],         // 11788
-            hsr: nums[2],          // 1121
-            vhsr: nums[3],         // 313
-            hmld: nums[7] || '—',  // 2660 (skip max vel columns)
-            accels: nums[9] || '—',   // 170
-            decels: nums[10] || '—',  // 209
+            gamePct: nums[0],
+            dist: nums[1],
+            hsr: nums[2],
+            vhsr: nums[3],
+            maxV: nums[4] || '—',
+            maxVkmh: nums[5] || '—',
+            maxVpct: nums[6] || '—',
+            hmld: nums[7] || '—',
+            hmldMin: nums[8] || '—',
+            accels: nums[9] || '—',
+            decels: nums[10] || '—',
           });
         }
       }
@@ -1864,10 +1832,10 @@ function renderGPSStats(text, filename) {
     if (gameMatch) {
       const timeParts = gameMatch[1].split(':');
       if (timeParts.length === 2) {
-        // Format: MM:SS (e.g., "98:47")
+        // MM:SS format
         durationMins = parseInt(timeParts[0]) + (parseInt(timeParts[1]) / 60);
       } else if (timeParts.length === 3) {
-        // Format: H:MM:SS (e.g., "1:38:47")
+        // H:MM:SS format
         durationMins = (parseInt(timeParts[0]) * 60) + parseInt(timeParts[1]) + (parseInt(timeParts[2]) / 60);
       }
     }
@@ -1896,36 +1864,6 @@ function renderGPSStats(text, filename) {
     
     showToast('GPS Match Benchmark saved ✓');
   }
-  
-  // Render GPS benchmark history
-  renderGPSHistory();
-}
-
-function renderGPSHistory() {
-  const historyDiv = document.getElementById('gps-history-list');
-  if (!historyDiv) return;
-  
-  if (matchGPSBenchmarks.history.length === 0) {
-    historyDiv.innerHTML = '<div style="color:#555;padding:8px;">No GPS benchmarks saved yet</div>';
-    return;
-  }
-  
-  historyDiv.innerHTML = matchGPSBenchmarks.history.map((b, i) => `
-    <div style="background:${i===0?'rgba(196,18,48,0.1)':'var(--panel2)'};border:1px solid ${i===0?'rgba(196,18,48,0.3)':'var(--border)'};border-radius:4px;padding:10px;margin-bottom:8px;">
-      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
-        <span style="font-weight:700;font-size:13px;">${b.opponent}</span>
-        <span style="color:var(--muted);font-size:11px;">${b.date}${i===0?' <span style="color:var(--red-light);">● LATEST</span>':''}</span>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;font-size:11px;">
-        <div><span style="color:var(--muted);">Dist/min:</span> <strong>${b.total_dist_per_min.toFixed(1)}m</strong></div>
-        <div><span style="color:var(--muted);">HSR/min:</span> <strong>${b.hsr_per_min.toFixed(1)}m</strong></div>
-        <div><span style="color:var(--muted);">HMLD/min:</span> <strong>${b.hmld_per_min.toFixed(1)}</strong></div>
-        <div><span style="color:var(--muted);">Accels/min:</span> <strong>${b.accels_per_min.toFixed(2)}</strong></div>
-        <div><span style="color:var(--muted);">Decels/min:</span> <strong>${b.decels_per_min.toFixed(2)}</strong></div>
-        <div><span style="color:var(--muted);">Max Vel:</span> <strong>${b.max_velocity?b.max_velocity.toFixed(2)+'m/s':'—'}</strong></div>
-      </div>
-    </div>
-  `).join('');
 }
 
 // AI analysis functions removed
