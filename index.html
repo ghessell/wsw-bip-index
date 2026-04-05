@@ -40,8 +40,8 @@
   .data-status.live { color: var(--green); }
   #csv-file-input { display: none; }
 
-  .section { display: none; padding: 24px 28px; max-width: 1400px; margin: 0 auto; }
-  .section.active { display: block; }
+  .section { display: none; padding: 24px 28px; max-width: 1400px; margin: 0 auto; min-height: 100px; }
+  .section.active { display: block; min-height: 100px; }
 
   .section-header { display: flex; align-items: baseline; gap: 14px; margin-bottom: 20px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
   .section-title { font-weight: 900; font-size: 26px; letter-spacing: 1px; }
@@ -388,7 +388,46 @@
             <div><span class="bin-input-label">200+s</span><input type="number" id="b7" placeholder="0" min="0" /></div>
           </div>
         </div>
-        <button class="calc-btn" onclick="calculateScore()">CALCULATE BIP PROFILE INDEX</button>
+        
+        <!-- GPS Physical Data (Optional) -->
+        <div class="divider"></div>
+        <div class="input-group">
+          <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="document.getElementById('gps-inputs-section').style.display=document.getElementById('gps-inputs-section').style.display==='none'?'block':'none'">
+            <label class="input-label" style="margin:0;">⚡ GPS Physical Data (Optional)</label>
+            <span id="gps-benchmark-status" style="font-size:10px;color:var(--muted);"></span>
+          </div>
+          <div id="gps-inputs-section" style="display:none;margin-top:12px;">
+            <div style="background:rgba(52,152,219,0.08);border:1px solid rgba(52,152,219,0.2);border-radius:4px;padding:10px;margin-bottom:12px;font-size:11px;color:#5dade2;">
+              <strong>Compare drill physical output to match GPS demands.</strong> Enter GPS data from training drill to calculate GPS Match Index (GMI).
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+              <div>
+                <label class="input-label">HSR >5.5m/s (meters)</label>
+                <input type="number" id="drill-hsr" placeholder="e.g. 245" min="0" step="1" />
+              </div>
+              <div>
+                <label class="input-label">HMLD >25.5w/kg</label>
+                <input type="number" id="drill-hmld" placeholder="e.g. 850" min="0" step="1" />
+              </div>
+              <div>
+                <label class="input-label">Intense Accels >2.5m/s²</label>
+                <input type="number" id="drill-accels" placeholder="e.g. 28" min="0" step="1" />
+              </div>
+              <div>
+                <label class="input-label">Intense Decels >2.5m/s²</label>
+                <input type="number" id="drill-decels" placeholder="e.g. 35" min="0" step="1" />
+              </div>
+            </div>
+            <div style="margin-top:8px;">
+              <label class="input-label">Match Benchmark</label>
+              <select id="gps-benchmark-select" style="width:100%;">
+                <option value="">No GPS benchmark loaded</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        
+        <button class="calc-btn" onclick="calculateScore()">CALCULATE DRILL PROFILE</button>
       </div>
     </div>
     <div id="audit-results">
@@ -430,7 +469,7 @@
 <div class="section" id="tab-gpsreader">
   <div class="section-header">
     <span class="section-title">GPS Report Reader</span>
-    <span class="section-sub">Upload a GPS game report PDF — extracts key stats and AI analysis</span>
+    <span class="section-sub">Upload a GPS game report PDF — extracts key match stats</span>
   </div>
 
  <div>
@@ -460,6 +499,8 @@
       </div>
     </div>
   </div>
+</div>
+
 <!-- ===== WEEK AUDIT CALENDAR ===== -->
 <div class="section" id="tab-calendar">
   <div class="section-header">
@@ -621,6 +662,12 @@ let pendingParseResult = null;
 let bipChartHalf = 0;
 let bopChartHalf = 0;
 
+// GPS match benchmarks
+let matchGPSBenchmarks = {
+  latest: null,
+  history: []
+};
+
 // GPS reader state (AI analysis removed)
 
 // ========== STORAGE (uses window.storage API, falls back gracefully) ==========
@@ -629,18 +676,79 @@ const GAMES_KEY     = 'wsw_bip_games_v2';
 const LIBRARY_KEY   = 'wsw_bip_library_v1';
 // GPS_CHATS_KEY removed
 
+// Storage wrapper with localStorage fallback
+const storage = {
+  async get(key, shared = false) {
+    try {
+      if (window.storage && typeof window.storage.get === 'function') {
+        return await storage.get(key, shared);
+      }
+    } catch (e) {
+      console.warn('window.storage.get failed, using localStorage:', e);
+    }
+    // Fallback to localStorage
+    const val = localStorage.getItem(key);
+    return val ? { key, value: val, shared } : null;
+  },
+  
+  async set(key, value, shared = false) {
+    try {
+      if (window.storage && typeof window.storage.set === 'function') {
+        return await storage.set(key, value, shared);
+      }
+    } catch (e) {
+      console.warn('window.storage.set failed, using localStorage:', e);
+    }
+    // Fallback to localStorage
+    localStorage.setItem(key, value);
+    return { key, value, shared };
+  },
+  
+  async delete(key, shared = false) {
+    try {
+      if (window.storage && typeof window.storage.delete === 'function') {
+        return await window.storage.delete(key, shared);
+      }
+    } catch (e) {
+      console.warn('window.storage.delete failed, using localStorage:', e);
+    }
+    // Fallback to localStorage
+    localStorage.removeItem(key);
+    return { key, deleted: true, shared };
+  },
+  
+  async list(prefix = '', shared = false) {
+    try {
+      if (window.storage && typeof window.storage.list === 'function') {
+        return await window.storage.list(prefix, shared);
+      }
+    } catch (e) {
+      console.warn('window.storage.list failed, using localStorage:', e);
+    }
+    // Fallback to localStorage
+    const keys = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(prefix)) {
+        keys.push(key);
+      }
+    }
+    return { keys, prefix, shared };
+  }
+};
+
 async function saveToStorage() {
   try {
     // Calendar sessions
-    await window.storage.set(STORAGE_KEY, JSON.stringify(weekSessions));
+    await storage.set(STORAGE_KEY, JSON.stringify(weekSessions));
     // Uploaded game metadata only (no logos, keep small)
     var gameMeta = games.filter(g => g._uploaded).map(g => ({
       opponent:g.opponent, date:g.date, comp:g.comp, location:g.location,
       fg:g.fg, h1:g.h1, h2:g.h2, _uploaded:true
     }));
-    await window.storage.set(GAMES_KEY, JSON.stringify(gameMeta));
+    await storage.set(GAMES_KEY, JSON.stringify(gameMeta));
     // Drill library
-    await window.storage.set(LIBRARY_KEY, JSON.stringify(drillLibrary));
+    await storage.set(LIBRARY_KEY, JSON.stringify(drillLibrary));
     showToast('Saved ✓');
   } catch(e) {
     showToast('Save failed — ' + e.message, true);
@@ -649,7 +757,7 @@ async function saveToStorage() {
 
 async function loadFromStorage() {
   try {
-    var calRes = await window.storage.get(STORAGE_KEY);
+    var calRes = await storage.get(STORAGE_KEY);
     if (calRes && calRes.value) {
       weekSessions = JSON.parse(calRes.value);
       renderCalendar(); renderWeekSummary();
@@ -657,7 +765,7 @@ async function loadFromStorage() {
   } catch(e) {}
 
   try {
-    var gmRes = await window.storage.get(GAMES_KEY);
+    var gmRes = await storage.get(GAMES_KEY);
     if (gmRes && gmRes.value) {
       var uploaded = JSON.parse(gmRes.value);
       uploaded.forEach(g => {
@@ -669,7 +777,7 @@ async function loadFromStorage() {
   } catch(e) {}
 
   try {
-    var libRes = await window.storage.get(LIBRARY_KEY);
+    var libRes = await storage.get(LIBRARY_KEY);
     if (libRes && libRes.value) {
       drillLibrary = JSON.parse(libRes.value);
       renderDrillLibrary();
@@ -680,7 +788,7 @@ async function loadFromStorage() {
 }
 
 function saveLibrary() {
-  window.storage.set(LIBRARY_KEY, JSON.stringify(drillLibrary)).catch(() => {});
+  storage.set(LIBRARY_KEY, JSON.stringify(drillLibrary)).catch(() => {});
 }
 
 function showToast(msg, isErr) {
@@ -1200,6 +1308,23 @@ function calculateScore() {
   const binVals=BINS.map((_,i)=>parseFloat(document.getElementById('b'+i).value)||0);
   const totalBinCount=binVals.reduce((a,b)=>a+b,0);
   if(!duration||!bipMins||!medBOP||!totalBinCount){alert('Please fill in all fields including at least one bin count.');return;}
+  
+  // Read GPS inputs (optional)
+  const gpsHSR = parseFloat(document.getElementById('drill-hsr').value) || 0;
+  const gpsHMLD = parseFloat(document.getElementById('drill-hmld').value) || 0;
+  const gpsAccels = parseFloat(document.getElementById('drill-accels').value) || 0;
+  const gpsDecels = parseFloat(document.getElementById('drill-decels').value) || 0;
+  const gpsBenchmarkIdx = parseInt(document.getElementById('gps-benchmark-select').value);
+  
+  const hasGPSData = gpsHSR > 0 || gpsHMLD > 0 || gpsAccels > 0 || gpsDecels > 0;
+  let gpsData = null;
+  let gmiResult = null;
+  
+  if (hasGPSData && !isNaN(gpsBenchmarkIdx) && matchGPSBenchmarks.history[gpsBenchmarkIdx]) {
+    gpsData = {hsr: gpsHSR, hmld: gpsHMLD, accels: gpsAccels, decels: gpsDecels};
+    gmiResult = calculateGMI(gpsData, duration, matchGPSBenchmarks.history[gpsBenchmarkIdx]);
+  }
+  
   const drillDist={};
   BINS.forEach((b,i)=>{drillDist[b]=totalBinCount>0?(binVals[i]/totalBinCount)*100:0;});
   let sadSum=0;
@@ -1209,7 +1334,12 @@ function calculateScore() {
   const drillBipPct=duration>0?(bipMins/duration)*100:0;
   const densityScore=Math.max(0,100-Math.abs(drillBipPct-bench.bip_pct)*2);
   const compositeScore=Math.round(distScore*0.4+restartScore*0.4+densityScore*0.2);
-  const scoreColor=getScoreColor(compositeScore);
+  
+  // Calculate MRS if GPS data available
+  const gmiScore = gmiResult ? gmiResult.gmi : null;
+  const mrsScore = gmiScore !== null ? Math.round(compositeScore * 0.6 + gmiScore * 0.4) : null;
+  
+  const scoreColor=getScoreColor(mrsScore !== null ? mrsScore : compositeScore);
   const rm=medBOP<=20?'PRESS':medBOP<=35?'NORM':'RECOVERY';
   const short=(drillDist['0-15s']||0)+(drillDist['15-30s']||0);
   const matchP=(drillDist['15-30s']||0)+(drillDist['30-60s']||0);
@@ -1220,11 +1350,34 @@ function calculateScore() {
     const mPct=bench.bip_dist[b]||0,dPct=Math.round(drillDist[b]);
     return `<div class="dist-comp-row"><div class="dist-comp-label">${b}</div><div class="dist-comp-bars"><div class="dist-comp-bar match-bar" style="width:${mPct}%"></div><div class="dist-comp-bar drill-bar" style="width:${dPct}%"></div></div><div style="font-size:10px;color:#777;width:90px;flex-shrink:0;">M:${mPct}% D:${dPct}%</div></div>`;
   }).join('');
-  const gpsData=(window._pendingGPS&&Object.keys(window._pendingGPS).length)?window._pendingGPS:null;
-  pendingDrill={name:drillName,duration,bipMins,bipPct:drillBipPct.toFixed(1),medBOP,score:compositeScore,distScore:Math.round(distScore),restartScore:Math.round(restartScore),densityScore:Math.round(densityScore),type:dt,format,binCounts:binVals.slice(),gps:gpsData};
+  
+  pendingDrill={name:drillName,duration,bipMins,bipPct:drillBipPct.toFixed(1),medBOP,score:compositeScore,distScore:Math.round(distScore),restartScore:Math.round(restartScore),densityScore:Math.round(densityScore),type:dt,format,binCounts:binVals.slice(),gps:gpsData,gmiScore,mrsScore};
+  
   let out='';
-  out+=`<div class="score-display" style="--score-col:${scoreColor};"><div class="score-label-sm">${drillName} — BIP PROFILE INDEX</div><div class="score-number" style="color:${scoreColor}">${compositeScore}</div><div class="score-classification" style="color:${scoreColor}">${getScoreLabel(compositeScore)}</div></div>`;
-  out+=`<div class="component-scores"><div class="comp-score"><div class="comp-val" style="color:${getScoreColor(Math.round(distScore))}">${Math.round(distScore)}</div><div class="comp-lbl">Distribution</div><div class="comp-wt">40% weight</div></div><div class="comp-score"><div class="comp-val" style="color:${getScoreColor(Math.round(restartScore))}">${Math.round(restartScore)}</div><div class="comp-lbl">Restart Pressure</div><div class="comp-wt">40% weight</div></div><div class="comp-score"><div class="comp-val" style="color:${getScoreColor(Math.round(densityScore))}">${Math.round(densityScore)}</div><div class="comp-lbl">BIP Density</div><div class="comp-wt">20% weight</div></div></div>`;
+  
+  // Main score display - show MRS if GPS data available, otherwise BPI
+  if (mrsScore !== null) {
+    out+=`<div class="score-display" style="--score-col:${scoreColor};"><div class="score-label-sm">${drillName} — MATCH REPLICATION SCORE</div><div class="score-number" style="color:${scoreColor}">${mrsScore}</div><div class="score-classification" style="color:${scoreColor}">${getScoreLabel(mrsScore)}</div></div>`;
+    out+=`<div class="component-scores"><div class="comp-score"><div class="comp-val" style="color:${getScoreColor(compositeScore)}">${compositeScore}</div><div class="comp-lbl">Structural (BPI)</div><div class="comp-wt">60% weight</div></div><div class="comp-score"><div class="comp-val" style="color:${getScoreColor(gmiScore)}">${gmiScore}</div><div class="comp-lbl">Physical (GMI)</div><div class="comp-wt">40% weight</div></div></div>`;
+  } else {
+    out+=`<div class="score-display" style="--score-col:${scoreColor};"><div class="score-label-sm">${drillName} — BIP PROFILE INDEX</div><div class="score-number" style="color:${scoreColor}">${compositeScore}</div><div class="score-classification" style="color:${scoreColor}">${getScoreLabel(compositeScore)}</div></div>`;
+    out+=`<div class="component-scores"><div class="comp-score"><div class="comp-val" style="color:${getScoreColor(Math.round(distScore))}">${Math.round(distScore)}</div><div class="comp-lbl">Distribution</div><div class="comp-wt">40% weight</div></div><div class="comp-score"><div class="comp-val" style="color:${getScoreColor(Math.round(restartScore))}">${Math.round(restartScore)}</div><div class="comp-lbl">Restart Pressure</div><div class="comp-wt">40% weight</div></div><div class="comp-score"><div class="comp-val" style="color:${getScoreColor(Math.round(densityScore))}">${Math.round(densityScore)}</div><div class="comp-lbl">BIP Density</div><div class="comp-wt">20% weight</div></div></div>`;
+  }
+  
+  // GPS Match Comparison section (if GPS data provided)
+  if (gmiResult) {
+    const c = gmiResult.components;
+    const icon = (pct) => pct >= 90 && pct <= 110 ? '✓' : pct > 110 ? '⚠' : '↓';
+    const iconCol = (pct) => pct >= 90 && pct <= 110 ? '#27AE60' : pct > 110 ? '#E67E22' : '#777';
+    out+=`<div class="card" style="margin-bottom:14px;border-left:3px solid #3498DB;"><div class="card-title">GPS Match Comparison</div>`;
+    out+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px;">`;
+    out+=`<div style="padding:8px;background:var(--panel2);border-radius:3px;"><div style="color:#777;margin-bottom:4px;">HSR/min</div><div style="font-weight:700;">${c.hsr.drill} vs ${c.hsr.match} <span style="color:${iconCol(c.hsr.pct)}">(${c.hsr.pct}%) ${icon(c.hsr.pct)}</span></div></div>`;
+    out+=`<div style="padding:8px;background:var(--panel2);border-radius:3px;"><div style="color:#777;margin-bottom:4px;">HMLD/min</div><div style="font-weight:700;">${c.hmld.drill} vs ${c.hmld.match} <span style="color:${iconCol(c.hmld.pct)}">(${c.hmld.pct}%) ${icon(c.hmld.pct)}</span></div></div>`;
+    out+=`<div style="padding:8px;background:var(--panel2);border-radius:3px;"><div style="color:#777;margin-bottom:4px;">Accels/min</div><div style="font-weight:700;">${c.accels.drill} vs ${c.accels.match} <span style="color:${iconCol(c.accels.pct)}">(${c.accels.pct}%) ${icon(c.accels.pct)}</span></div></div>`;
+    out+=`<div style="padding:8px;background:var(--panel2);border-radius:3px;"><div style="color:#777;margin-bottom:4px;">Decels/min</div><div style="font-weight:700;">${c.decels.drill} vs ${c.decels.match} <span style="color:${iconCol(c.decels.pct)}">(${c.decels.pct}%) ${icon(c.decels.pct)}</span></div></div>`;
+    out+=`</div></div>`;
+  }
+  
   out+=`<div class="card" style="margin-bottom:14px;"><div class="card-title">BIP Distribution — Match vs Drill (${bench.label} · ${bench.n_games} games)</div>${compBars}<div class="legend"><div class="legend-item"><div class="legend-dot match-bar"></div>Match benchmark</div><div class="legend-item"><div class="legend-dot drill-bar"></div>This drill</div></div></div>`;
   out+=`<div class="card" style="margin-bottom:14px;"><div class="card-title">Metrics vs Benchmark</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;font-size:12px;"><div style="padding:9px;background:var(--panel2);border-radius:3px;"><div style="color:#777;margin-bottom:3px;">BIP Density</div><div style="font-weight:700;font-size:18px;">${drillBipPct.toFixed(1)}%</div><div style="color:#777;font-size:11px;">Match: ${bench.bip_pct}%</div></div><div style="padding:9px;background:var(--panel2);border-radius:3px;"><div style="color:#777;margin-bottom:3px;">Median BOP</div><div style="font-weight:700;font-size:18px;">${medBOP}s</div><div style="color:#777;font-size:11px;">Match: ${bench.est_median_bop}s</div></div><div style="padding:9px;background:var(--panel2);border-radius:3px;"><div style="color:#777;margin-bottom:3px;">Distribution SAD</div><div style="font-weight:700;font-size:18px;">${sadSum.toFixed(1)}</div><div style="color:#777;font-size:11px;">0 = identical</div></div></div></div>`;
   out+=`<div style="background:var(--panel2);border:1px solid var(--border);border-radius:4px;padding:14px;margin-bottom:14px;"><div style="font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--gold);margin-bottom:8px;">Prescription Classification</div><div class="presc-tags"><span class="presc-tag tag-r">RESTART: ${rm}</span><span class="presc-tag tag-s">PROFILE: ${sp}</span><span class="presc-tag tag-t">${dt}</span></div></div>`;
@@ -1246,15 +1399,30 @@ function renderSession() {
   if(!sessionDrills.length){list.innerHTML='<div style="padding:16px 12px;color:#777;font-size:12px;">No drills added yet. Score a drill in the Drill Audit tab.</div>';const sa=document.getElementById('session-summary-area');if(sa)sa.innerHTML='';return;}
   list.innerHTML=sessionDrills.map((d,i)=>{
     const sc=getScoreColor(d.score),typeCol=d.score>=60?'#27AE60':d.medBOP>45?'#3498DB':'#E67E22',typeLbl=d.type?(d.type.split('—')[0].trim()):'';
-    return `<div class="drill-row"><div style="font-weight:500;">${d.name}</div><div>${d.duration}min</div><div>${d.bipMins}min</div><div>${d.bipPct}%</div><div>${d.medBOP}s</div><div><span class="score-chip" style="background:${sc}18;color:${sc};border:1px solid ${sc}33">${d.score}</span></div><div style="font-size:10px;color:${typeCol}">${typeLbl}</div><div><button class="remove-btn" onclick="removeSessionDrill(${i})">✕</button></div></div>`;
+    const hasGPS = d.gmiScore !== null && d.gmiScore !== undefined;
+    const scoreLabel = hasGPS ? `BPI:${d.score} GMI:${d.gmiScore}` : d.score;
+    return `<div class="drill-row"><div style="font-weight:500;">${d.name}${hasGPS?' ⚡':''}</div><div>${d.duration}min</div><div>${d.bipMins}min</div><div>${d.bipPct}%</div><div>${d.medBOP}s</div><div><span class="score-chip" style="background:${sc}18;color:${sc};border:1px solid ${sc}33;font-size:${hasGPS?'9px':'11px'}">${scoreLabel}</span></div><div style="font-size:10px;color:${typeCol}">${typeLbl}</div><div><button class="remove-btn" onclick="removeSessionDrill(${i})">✕</button></div></div>`;
   }).join('');
   const countable=sessionDrills.filter(d=>d.format==='countable');
   if(!countable.length)return;
   const totDur=countable.reduce((a,d)=>a+d.duration,0),totBip=countable.reduce((a,d)=>a+d.bipMins,0),sBipPct=totDur>0?(totBip/totDur*100).toFixed(1):0;
   const avgScore=Math.round(countable.reduce((a,d)=>a+d.score,0)/countable.length),avgBOP=Math.round(countable.reduce((a,d)=>a+d.medBOP,0)/countable.length),typeB=countable.filter(d=>d.score>=60).length;
+  
+  // Calculate avg GMI if any drills have GPS data
+  const gpsDrills = countable.filter(d => d.gmiScore !== null && d.gmiScore !== undefined);
+  const avgGMI = gpsDrills.length > 0 ? Math.round(gpsDrills.reduce((a,d)=>a+d.gmiScore,0)/gpsDrills.length) : null;
+  
   const sc=getScoreColor(avgScore);
   const sa=document.getElementById('session-summary-area');
-  if(sa) sa.innerHTML=`<div class="session-summary"><div style="text-align:center"><div style="font-weight:900;font-size:30px;color:${sc}">${avgScore}</div><div style="font-size:10px;color:#777;letter-spacing:1px;text-transform:uppercase">Avg BPI</div></div><div style="text-align:center"><div style="font-weight:900;font-size:30px;color:var(--red-light)">${sBipPct}%</div><div style="font-size:10px;color:#777;letter-spacing:1px;text-transform:uppercase">Session BIP%</div></div><div style="text-align:center"><div style="font-weight:900;font-size:30px;color:var(--text)">${avgBOP}s</div><div style="font-size:10px;color:#777;letter-spacing:1px;text-transform:uppercase">Avg Med BOP</div></div><div style="text-align:center"><div style="font-weight:900;font-size:30px;color:#2ECC71">${typeB}</div><div style="font-size:10px;color:#777;letter-spacing:1px;text-transform:uppercase">Type B (≥60)</div></div></div>`;
+  if(sa) {
+    let summaryHTML = `<div class="session-summary"><div style="text-align:center"><div style="font-weight:900;font-size:30px;color:${sc}">${avgScore}</div><div style="font-size:10px;color:#777;letter-spacing:1px;text-transform:uppercase">Avg BPI</div></div>`;
+    if (avgGMI !== null) {
+      const gmiCol = getScoreColor(avgGMI);
+      summaryHTML += `<div style="text-align:center"><div style="font-weight:900;font-size:30px;color:${gmiCol}">${avgGMI}</div><div style="font-size:10px;color:#777;letter-spacing:1px;text-transform:uppercase">Avg GMI ⚡</div></div>`;
+    }
+    summaryHTML += `<div style="text-align:center"><div style="font-weight:900;font-size:30px;color:var(--red-light)">${sBipPct}%</div><div style="font-size:10px;color:#777;letter-spacing:1px;text-transform:uppercase">Session BIP%</div></div><div style="text-align:center"><div style="font-weight:900;font-size:30px;color:var(--text)">${avgBOP}s</div><div style="font-size:10px;color:#777;letter-spacing:1px;text-transform:uppercase">Avg Med BOP</div></div><div style="text-align:center"><div style="font-weight:900;font-size:30px;color:#2ECC71">${typeB}</div><div style="font-size:10px;color:#777;letter-spacing:1px;text-transform:uppercase">Type B (≥60)</div></div></div>`;
+    sa.innerHTML = summaryHTML;
+  }
 }
 
 // ========== CALENDAR ==========
@@ -1298,7 +1466,7 @@ function renderWeekSummary() {
 }
 
 // ========== DRILL LIBRARY ==========
-function loadLibrary(){try{const raw=window.storage&&window.storage.get?null:null;}catch(e){}}
+function loadLibrary(){try{const raw=storage&&storage.get?null:null;}catch(e){}}
 function saveDrillToLibrary(){
   if(!pendingDrill){alert('Score a drill in the Drill Audit tab first.');return;}
   const d=pendingDrill;
@@ -1491,47 +1659,254 @@ function processGPSPDF(file) {
 }
 
 function renderGPSStats(text, filename) {
-  // Extract key stats from text using regex patterns
   const statGrid=document.getElementById('gps-stat-grid');
-  const statsToFind=[
-    {label:'Total Distance',unit:'m',patterns:[/total\s+dist(?:ance)?[:\s]+([0-9,]+(?:\.\d+)?)/i,/distance[:\s]+([0-9,]+)\s*m/i]},
-    {label:'HSR Distance',unit:'m',patterns:[/hsr[:\s]+([0-9,]+(?:\.\d+)?)\s*m/i,/high\s+speed[:\s]+([0-9,]+)/i]},
-    {label:'HMLD',unit:'',patterns:[/hmld[:\s]+([0-9,]+(?:\.\d+)?)/i,/high\s+metab[:\s]+([0-9,]+)/i]},
-    {label:'Accelerations',unit:'',patterns:[/accel(?:eration)?s?[:\s]+([0-9]+)/i,/acc[:\s]+([0-9]+)/i]},
-    {label:'Decelerations',unit:'',patterns:[/decel(?:eration)?s?[:\s]+([0-9]+)/i,/dec[:\s]+([0-9]+)/i]},
-    {label:'Max Speed',unit:'km/h',patterns:[/max(?:imum)?\s+speed[:\s]+([0-9.]+)/i,/peak\s+speed[:\s]+([0-9.]+)/i]},
-    {label:'Duration',unit:'min',patterns:[/duration[:\s]+(\d{1,2}:\d{2})/i,/time[:\s]+(\d{1,2}:\d{2})/i]},
-    {label:'Players',unit:'',patterns:[/(\d+)\s+players/i,/n\s*=\s*(\d+)/i]},
-  ];
-
-  statGrid.innerHTML=statsToFind.map(stat=>{
-    let val='—';
-    for(const pat of stat.patterns){const m=text.match(pat);if(m){val=m[1].replace(/,/g,'');break;}}
-    return `<div class="gps-stat-cell"><div class="gps-stat-val">${val}${val!=='—'&&stat.unit?' <span style="font-size:12px;font-weight:400;">${stat.unit}</span>':''}</div><div class="gps-stat-lbl">${stat.label}</div></div>`;
-  }).join('');
-
-  // Try to extract player table
   const playerTable=document.getElementById('gps-player-table');
-  // Look for player rows (names with numbers)
-  const playerLines=[];
-  text.split('\n').forEach(line=>{
-    if(/^\w+[,\s]+\w+.*\d{3,}/.test(line)||(/[A-Z][a-z]+\s+[A-Z][a-z]+/.test(line)&&/\d+/.test(line)&&line.length>20&&line.length<200)){
-      const cols=line.trim().split(/\s{2,}|\t/).filter(s=>s.trim());
-      if(cols.length>=3)playerLines.push(cols);
+  
+  // Extract match header info (1st Half, 2nd Half, Game durations)
+  const h1Match = text.match(/1st\s+Half[:\s]+(\d{1,2}:\d{2}(?::\d{2})?)/i);
+  const h2Match = text.match(/2nd\s+Half[:\s]+(\d{1,2}:\d{2}(?::\d{2})?)/i);
+  const gameMatch = text.match(/Game[:\s]+(\d{1,2}:\d{2}(?::\d{2})?)/i);
+  
+  // Extract Period summary table (look for "Game Averages" row)
+  const gameAvgMatch = text.match(/Game\s+Average[s]?\s+[\d:]+\s+(\d+)\s+(\d+)\s+(\d+)\s+[\d.]+/i);
+  
+  // Parse totals from "GAME TOTALS" section
+  let totalDist = '—', totalHSR = '—', totalvHSR = '—', totalHMLD = '—', totalHMLDmin = '—';
+  let totalAccels = '—', totalDecels = '—';
+  
+  // Look for GAME TOTALS section
+  const totalsSection = text.match(/GAME\s+TOTALS[\s\S]{0,500}?Total\s+Distance[^0-9]*(\d+)[^0-9]*HSR[^0-9]*(\d+)[^0-9]*vHSR[^0-9]*(\d+)/i);
+  if (totalsSection) {
+    totalDist = totalsSection[1];
+    totalHSR = totalsSection[2];
+    totalvHSR = totalsSection[3];
+  }
+  
+  // Try alternative pattern for totals
+  const altTotals = text.match(/(\d{4,5})\s+(\d{2,4})\s+(\d{2,4})[\s\S]{0,100}?HMLD/i);
+  if (altTotals && totalDist === '—') {
+    totalDist = altTotals[1];
+    totalHSR = altTotals[2];
+    totalvHSR = altTotals[3];
+  }
+  
+  // Look for HMLD totals
+  const hmldMatch = text.match(/HMLD[^0-9]*(\d{3,5}(?:\.\d)?)[^0-9]*(\d{2,3})/i);
+  if (hmldMatch) {
+    totalHMLD = hmldMatch[1];
+    totalHMLDmin = hmldMatch[2];
+  }
+  
+  // Look for Accels/Decels totals
+  const accelsMatch = text.match(/Intense\s+Accels[^0-9]*(\d{2,4})/i);
+  const decelsMatch = text.match(/Intense\s+Decels[^0-9]*(\d{2,4})/i);
+  if (accelsMatch) totalAccels = accelsMatch[1];
+  if (decelsMatch) totalDecels = decelsMatch[1];
+  
+  // Display summary stats
+  const stats = [
+    {label: 'Match Duration', val: gameMatch ? gameMatch[1] : '—', unit: ''},
+    {label: 'Total Distance', val: totalDist, unit: 'm'},
+    {label: 'HSR Distance', val: totalHSR, unit: 'm'},
+    {label: 'vHSR Distance', val: totalvHSR, unit: 'm'},
+    {label: 'HMLD', val: totalHMLD, unit: ''},
+    {label: 'HMLD/MIN', val: totalHMLDmin, unit: ''},
+    {label: 'Intense Accels', val: totalAccels, unit: ''},
+    {label: 'Intense Decels', val: totalDecels, unit: ''},
+  ];
+  
+  statGrid.innerHTML = stats.map(s => 
+    `<div class="gps-stat-cell"><div class="gps-stat-val">${s.val}${s.val!=='—'&&s.unit?' <span style="font-size:12px;font-weight:400;">${s.unit}</span>':''}</div><div class="gps-stat-lbl">${s.label}</div></div>`
+  ).join('');
+  
+  // Extract player table - look for STARTING XI section
+  const lines = text.split('\n');
+  const playerRows = [];
+  let inPlayerSection = false;
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    
+    // Detect start of player table
+    if (/STARTING\s+XI|Player\s+Name.*Game\s*%/i.test(line)) {
+      inPlayerSection = true;
+      continue;
     }
-  });
-  if(playerLines.length>0&&playerLines.length<30){
-    playerTable.innerHTML='<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:11px;">'
-      +'<thead><tr>'+playerLines[0].map(h=>'<th style="padding:6px 8px;border-bottom:1px solid var(--border);color:var(--muted);text-align:left;">'+h+'</th>').join('')+'</tr></thead>'
-      +'<tbody>'+playerLines.slice(1).map((r,i)=>'<tr style="background:'+(i%2===0?'transparent':'rgba(255,255,255,0.02)')+'">'
-        +r.map(c=>'<td style="padding:6px 8px;border-bottom:1px solid #1A1A1A;">'+c+'</td>').join('')+'</tr>').join('')
-      +'</tbody></table></div>';
+    
+    // Detect end of player section
+    if (inPlayerSection && (/SUBSTITUTES|HALF\s+COMPARISON|1st\s+Half.*2nd\s+Half/i.test(line) || line.trim() === '')) {
+      if (/SUBSTITUTES/i.test(line)) {
+        // Continue into substitutes section
+        continue;
+      } else {
+        break;
+      }
+    }
+    
+    // Extract player rows (must have player name followed by numbers)
+    if (inPlayerSection) {
+      // Match pattern: Name (letters) followed by percentage and numbers
+      const playerMatch = line.match(/^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s+(\d+%)\s+(\d+)\s+(\d+)\s+(\d+)/);
+      if (playerMatch) {
+        const [, name, gamePct, dist, hsr, vhsr] = playerMatch;
+        // Extract remaining numbers from line
+        const nums = line.replace(name, '').trim().split(/\s+/).filter(s => /^[\d.%]+$/.test(s));
+        if (nums.length >= 10) {
+          playerRows.push({
+            name,
+            gamePct: nums[0],
+            dist: nums[1],
+            hsr: nums[2],
+            vhsr: nums[3],
+            maxV: nums[4] || '—',
+            maxVkmh: nums[5] || '—',
+            maxVpct: nums[6] || '—',
+            hmld: nums[7] || '—',
+            hmldMin: nums[8] || '—',
+            accels: nums[9] || '—',
+            decels: nums[10] || '—',
+          });
+        }
+      }
+    }
+  }
+  
+  // Render player table
+  if (playerRows.length > 0) {
+    playerTable.innerHTML = `
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;">
+          <thead>
+            <tr style="border-bottom:1px solid var(--border);">
+              <th style="padding:6px 8px;text-align:left;color:var(--muted);">Player</th>
+              <th style="padding:6px 8px;text-align:center;color:var(--muted);">%</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--muted);">Dist (m)</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--muted);">HSR (m)</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--muted);">vHSR (m)</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--muted);">HMLD</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--muted);">Accels</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--muted);">Decels</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${playerRows.map((p, i) => `
+              <tr style="background:${i%2===0?'transparent':'rgba(255,255,255,0.02)'};border-bottom:1px solid #1A1A1A;">
+                <td style="padding:6px 8px;font-weight:600;">${p.name}</td>
+                <td style="padding:6px 8px;text-align:center;color:#777;">${p.gamePct}</td>
+                <td style="padding:6px 8px;text-align:right;">${p.dist}</td>
+                <td style="padding:6px 8px;text-align:right;">${p.hsr}</td>
+                <td style="padding:6px 8px;text-align:right;">${p.vhsr}</td>
+                <td style="padding:6px 8px;text-align:right;">${p.hmld}</td>
+                <td style="padding:6px 8px;text-align:right;color:#3498DB;">${p.accels}</td>
+                <td style="padding:6px 8px;text-align:right;color:#E67E22;">${p.decels}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
   } else {
-    playerTable.innerHTML='<div style="color:#555;font-size:12px;padding:8px;">Player-level data not detected in this PDF format.</div>';
+    playerTable.innerHTML = '<div style="color:#555;font-size:12px;padding:8px;">No player data detected. PDF may be in a different format.</div>';
+  }
+  
+  // Store GPS benchmarks for drill comparison
+  if (totalDist !== '—' && totalHSR !== '—' && totalHMLD !== '—' && totalAccels !== '—' && totalDecels !== '—') {
+    // Extract match info from filename
+    const matchDate = filename.match(/(\d{1,2})[._-](\d{1,2})[._-](\d{4})/);
+    const opponent = filename.replace(/\.pdf$/i, '').replace(/_/g, ' ').replace(/NPL|RD\d+|copy/gi, '').trim();
+    
+    // Calculate duration in minutes
+    let durationMins = 95; // default
+    if (gameMatch) {
+      const parts = gameMatch[1].split(':');
+      durationMins = parseInt(parts[0]) + (parseInt(parts[1]) / 60);
+    }
+    
+    // Calculate per-minute benchmarks
+    const benchmark = {
+      date: matchDate ? matchDate[3]+'-'+matchDate[2].padStart(2,'0')+'-'+matchDate[1].padStart(2,'0') : new Date().toISOString().slice(0,10),
+      opponent: opponent || 'Unknown',
+      filename: filename,
+      duration: durationMins,
+      hsr_per_min: parseFloat(totalHSR) / durationMins,
+      hmld_per_min: parseFloat(totalHMLD) / durationMins,
+      accels_per_min: parseFloat(totalAccels) / durationMins,
+      decels_per_min: parseFloat(totalDecels) / durationMins
+    };
+    
+    // Update latest and add to history
+    matchGPSBenchmarks.latest = benchmark;
+    matchGPSBenchmarks.history.unshift(benchmark);
+    if (matchGPSBenchmarks.history.length > 10) matchGPSBenchmarks.history = matchGPSBenchmarks.history.slice(0, 10);
+    
+    // Update dropdown in Drill Audit
+    updateGPSBenchmarkDropdown();
+    
+    showToast('GPS Match Benchmark saved ✓');
   }
 }
 
 // AI analysis functions removed
+
+// ========== GPS MATCH COMPARISON ==========
+function updateGPSBenchmarkDropdown() {
+  const select = document.getElementById('gps-benchmark-select');
+  const status = document.getElementById('gps-benchmark-status');
+  
+  if (!matchGPSBenchmarks.latest) {
+    select.innerHTML = '<option value="">No GPS benchmark loaded</option>';
+    status.textContent = 'Upload a GPS match report to enable';
+    status.style.color = '#777';
+    return;
+  }
+  
+  // Build options from history
+  const options = matchGPSBenchmarks.history.map((b, i) => {
+    const label = i === 0 ? `${b.opponent} - ${b.date} (Latest)` : `${b.opponent} - ${b.date}`;
+    return `<option value="${i}" ${i===0?'selected':''}>${label}</option>`;
+  }).join('');
+  
+  select.innerHTML = options;
+  status.textContent = `✓ Match benchmark available (${matchGPSBenchmarks.latest.opponent})`;
+  status.style.color = '#27AE60';
+}
+
+function calculateGMI(drillGPS, drillDuration, benchmark) {
+  if (!drillGPS || !benchmark || !drillDuration || drillDuration === 0) return null;
+  
+  // Calculate drill per-minute values
+  const drillHSRpm = drillGPS.hsr / drillDuration;
+  const drillHMLDpm = drillGPS.hmld / drillDuration;
+  const drillAccelspm = drillGPS.accels / drillDuration;
+  const drillDecelspm = drillGPS.decels / drillDuration;
+  
+  // Calculate similarity scores (0-100 for each component)
+  // Score = 100 - (|difference| / benchmark * 100), capped at 0-100
+  function similarity(drillVal, benchVal) {
+    if (benchVal === 0) return drillVal === 0 ? 100 : 0;
+    const diff = Math.abs(drillVal - benchVal);
+    const pctDiff = (diff / benchVal) * 100;
+    return Math.max(0, Math.min(100, 100 - pctDiff));
+  }
+  
+  const hsrScore = similarity(drillHSRpm, benchmark.hsr_per_min);
+  const hmldScore = similarity(drillHMLDpm, benchmark.hmld_per_min);
+  const accelsScore = similarity(drillAccelspm, benchmark.accels_per_min);
+  const decelsScore = similarity(drillDecelspm, benchmark.decels_per_min);
+  
+  // Overall GMI (equal weighting: 25% each)
+  const gmi = Math.round((hsrScore + hmldScore + accelsScore + decelsScore) / 4);
+  
+  return {
+    gmi,
+    components: {
+      hsr: {score: Math.round(hsrScore), drill: drillHSRpm.toFixed(1), match: benchmark.hsr_per_min.toFixed(1), pct: (drillHSRpm/benchmark.hsr_per_min*100).toFixed(0)},
+      hmld: {score: Math.round(hmldScore), drill: drillHMLDpm.toFixed(1), match: benchmark.hmld_per_min.toFixed(1), pct: (drillHMLDpm/benchmark.hmld_per_min*100).toFixed(0)},
+      accels: {score: Math.round(accelsScore), drill: drillAccelspm.toFixed(1), match: benchmark.accels_per_min.toFixed(1), pct: (drillAccelspm/benchmark.accels_per_min*100).toFixed(0)},
+      decels: {score: Math.round(decelsScore), drill: drillDecelspm.toFixed(1), match: benchmark.decels_per_min.toFixed(1), pct: (drillDecelspm/benchmark.decels_per_min*100).toFixed(0)}
+    }
+  };
+}
 
 // ========== PDF EXPORT ==========
 function showPdfExportModal(){document.getElementById('pdf-modal').classList.add('open');}
@@ -1577,18 +1952,19 @@ updateAll();
 renderCalendar();
 renderWeekSummary();
 renderDrillLibrary();
+updateGPSBenchmarkDropdown();
 
 // Load persisted data on start
 (async function() {
   try {
-    const calRes = await window.storage.get(STORAGE_KEY);
+    const calRes = await storage.get(STORAGE_KEY);
     if (calRes && calRes.value) {
       weekSessions = JSON.parse(calRes.value);
       renderCalendar(); renderWeekSummary();
     }
   } catch(e) {}
   try {
-    const gmRes = await window.storage.get(GAMES_KEY);
+    const gmRes = await storage.get(GAMES_KEY);
     if (gmRes && gmRes.value) {
       const uploaded = JSON.parse(gmRes.value);
       uploaded.forEach(g => {
@@ -1599,7 +1975,7 @@ renderDrillLibrary();
     }
   } catch(e) {}
   try {
-    const libRes = await window.storage.get(LIBRARY_KEY);
+    const libRes = await storage.get(LIBRARY_KEY);
     if (libRes && libRes.value) {
       drillLibrary = JSON.parse(libRes.value);
       renderDrillLibrary();
