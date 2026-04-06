@@ -225,6 +225,26 @@
     min-width: 120px;
   }
   
+  /* Force wider layout to prevent wrapping on smaller monitors */
+  .section { min-width: 1200px; }
+  
+  .benchmark-grid { 
+    display: grid; 
+    grid-template-columns: repeat(6, minmax(140px, 1fr)); 
+    gap: 12px; 
+    margin-bottom: 20px; 
+  }
+  
+  .session-table th { 
+    white-space: nowrap;
+    min-width: 80px;
+  }
+  
+  .session-table td {
+    white-space: nowrap;
+    min-width: 80px;
+  }
+  
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
