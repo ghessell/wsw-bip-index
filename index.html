@@ -562,6 +562,11 @@
         <h3 class="sub-heading">Player Load Summary</h3>
         <div id="gps-player-table"></div>
       </div>
+      
+      <div style="margin-top:20px;">
+        <h3 class="sub-heading">GPS Match Benchmarks History</h3>
+        <div id="gps-benchmark-history" style="font-size:12px;color:#777;font-style:italic;">No benchmarks saved yet</div>
+      </div>
     </div>
   </div>
 </div>
@@ -733,12 +738,17 @@ let matchGPSBenchmarks = {
   history: []
 };
 
+// Training GPS drills (from session PDFs)
+let trainingDrills = [];
+
 // GPS reader state (AI analysis removed)
 
 // ========== STORAGE (uses window.storage API, falls back gracefully) ==========
 const STORAGE_KEY   = 'wsw_bip_calendar_v2';
 const GAMES_KEY     = 'wsw_bip_games_v2';
 const LIBRARY_KEY   = 'wsw_bip_library_v1';
+const GPS_BENCHMARKS_KEY = 'wsw_gps_benchmarks_v1';
+const TRAINING_DRILLS_KEY = 'wsw_training_drills_v1';
 // GPS_CHATS_KEY removed
 
 // Storage wrapper with localStorage fallback
@@ -814,6 +824,10 @@ async function saveToStorage() {
     await storage.set(GAMES_KEY, JSON.stringify(gameMeta));
     // Drill library
     await storage.set(LIBRARY_KEY, JSON.stringify(drillLibrary));
+    // GPS benchmarks
+    await storage.set(GPS_BENCHMARKS_KEY, JSON.stringify(matchGPSBenchmarks));
+    // Training drills
+    await storage.set(TRAINING_DRILLS_KEY, JSON.stringify(trainingDrills));
     showToast('Saved ✓');
   } catch(e) {
     showToast('Save failed — ' + e.message, true);
@@ -846,6 +860,27 @@ async function loadFromStorage() {
     if (libRes && libRes.value) {
       drillLibrary = JSON.parse(libRes.value);
       renderDrillLibrary();
+    }
+  } catch(e) {}
+
+  try {
+    var gpsRes = await storage.get(GPS_BENCHMARKS_KEY);
+    if (gpsRes && gpsRes.value) {
+      const restored = JSON.parse(gpsRes.value);
+      if (restored && restored.history && Array.isArray(restored.history)) {
+        matchGPSBenchmarks = restored;
+        updateGPSBenchmarkDropdown();
+      }
+    }
+  } catch(e) {}
+
+  try {
+    var drillsRes = await storage.get(TRAINING_DRILLS_KEY);
+    if (drillsRes && drillsRes.value) {
+      const restored = JSON.parse(drillsRes.value);
+      if (restored && Array.isArray(restored)) {
+        trainingDrills = restored;
+      }
     }
   } catch(e) {}
 
@@ -1790,6 +1825,23 @@ function parseDrillPDF(pageTexts,statusEl,resultsEl,listEl) {
     }).join('');
     
     window._pdfDrillResults = results;
+    
+    // Add to persistent training drills (keep last 160 drills)
+    const sessionData = {
+      date: new Date().toISOString().slice(0, 10),
+      drills: results,
+      source: 'STATSports'
+    };
+    trainingDrills.unshift(sessionData);
+    if (trainingDrills.length > 160) trainingDrills = trainingDrills.slice(0, 160);
+    
+    // Save to localStorage
+    try {
+      localStorage.setItem(TRAINING_DRILLS_KEY, JSON.stringify(trainingDrills));
+    } catch (e) {
+      console.warn('Failed to save training drills:', e);
+    }
+    
     resultsEl.style.display = 'block';
     
   } else {
@@ -1852,6 +1904,23 @@ function parseDrillPDF(pageTexts,statusEl,resultsEl,listEl) {
       return `<div style="padding:10px 12px;background:var(--panel2);border:1px solid var(--border);border-radius:3px;cursor:pointer;transition:border-color 0.15s;" onclick="loadPDFDrill(${i})" onmouseover="this.style.borderColor='rgba(52,152,219,0.5)'" onmouseout="this.style.borderColor='var(--border)'"><div style="display:flex;align-items:center;gap:10px;"><div style="flex:1;"><div style="font-weight:600;font-size:13px;">${d.name}</div><div style="font-size:11px;color:#777;margin-top:3px;">${d.repCount} rep${d.repCount!==1?'s':''} · ${d.totalMins}min · BIP ${d.bipMins}min (${bipPct}%)${d.medBOPsecs?' · Med BOP '+d.medBOPsecs+'s':''}</div>${binSummary?'<div style="font-size:10px;color:#555;margin-top:3px;">Bins: '+binSummary+'</div>':''}</div><div style="font-size:10px;letter-spacing:1px;color:#3498DB;font-weight:700;flex-shrink:0;">LOAD →</div></div></div>`;
     }).join('');
     window._pdfDrillResults=results;
+    
+    // Add to persistent training drills (keep last 160 drills)
+    const sessionData = {
+      date: new Date().toISOString().slice(0, 10),
+      drills: results,
+      source: 'Sportscode'
+    };
+    trainingDrills.unshift(sessionData);
+    if (trainingDrills.length > 160) trainingDrills = trainingDrills.slice(0, 160);
+    
+    // Save to localStorage
+    try {
+      localStorage.setItem(TRAINING_DRILLS_KEY, JSON.stringify(trainingDrills));
+    } catch (e) {
+      console.warn('Failed to save training drills:', e);
+    }
+    
     resultsEl.style.display='block';
   }
 }
@@ -2134,7 +2203,14 @@ function renderGPSStats(text, filename) {
     // Update latest and add to history
     matchGPSBenchmarks.latest = benchmark;
     matchGPSBenchmarks.history.unshift(benchmark);
-    if (matchGPSBenchmarks.history.length > 10) matchGPSBenchmarks.history = matchGPSBenchmarks.history.slice(0, 10);
+    if (matchGPSBenchmarks.history.length > 50) matchGPSBenchmarks.history = matchGPSBenchmarks.history.slice(0, 50);
+    
+    // Persist to localStorage
+    try {
+      localStorage.setItem(GPS_BENCHMARKS_KEY, JSON.stringify(matchGPSBenchmarks));
+    } catch (e) {
+      console.warn('Failed to save GPS benchmarks to localStorage:', e);
+    }
     
     // Update dropdown in Drill Audit
     updateGPSBenchmarkDropdown();
@@ -2149,11 +2225,13 @@ function renderGPSStats(text, filename) {
 function updateGPSBenchmarkDropdown() {
   const select = document.getElementById('gps-benchmark-select');
   const status = document.getElementById('gps-benchmark-status');
+  const historyDiv = document.getElementById('gps-benchmark-history');
   
   if (!matchGPSBenchmarks.latest) {
     select.innerHTML = '<option value="">No GPS benchmark loaded</option>';
     status.textContent = 'Upload a GPS match report to enable';
     status.style.color = '#777';
+    if (historyDiv) historyDiv.innerHTML = '<div style="font-size:12px;color:#777;font-style:italic;">No benchmarks saved yet</div>';
     return;
   }
   
@@ -2166,6 +2244,32 @@ function updateGPSBenchmarkDropdown() {
   select.innerHTML = options;
   status.textContent = `✓ Match benchmark available (${matchGPSBenchmarks.latest.opponent})`;
   status.style.color = '#27AE60';
+  
+  // Update history display
+  if (historyDiv) {
+    const historyHTML = matchGPSBenchmarks.history.map((b, i) => `
+      <div style="padding:10px;background:${i===0?'rgba(52,152,219,0.1)':'var(--panel2)'};border:1px solid var(--border);border-radius:3px;margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <div style="font-weight:600;font-size:13px;">${b.opponent} - ${b.date}${i===0?' <span style="color:#3498DB;font-size:10px;letter-spacing:1px;">(LATEST)</span>':''}</div>
+            <div style="font-size:11px;color:#777;margin-top:3px;">${b.duration.toFixed(0)} mins · ${b.filename}</div>
+          </div>
+          <div style="text-align:right;font-size:11px;color:#888;">
+            <div>${b.total_dist_per_min.toFixed(1)} m/min</div>
+            <div>${b.hsr_per_min.toFixed(1)} HSR/min</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:8px;font-size:10px;">
+          <div><span style="color:#777;">HMLD/min:</span> ${b.hmld_per_min.toFixed(1)}</div>
+          <div><span style="color:#777;">Accels/min:</span> ${b.accels_per_min.toFixed(2)}</div>
+          <div><span style="color:#777;">Decels/min:</span> ${b.decels_per_min.toFixed(2)}</div>
+          <div><span style="color:#777;">Max Vel:</span> ${b.max_velocity ? b.max_velocity.toFixed(2) + ' m/s' : '—'}</div>
+          <div><span style="color:#777;">Avg Vel:</span> ${(b.total_dist_per_min / 60).toFixed(2)} m/s</div>
+        </div>
+      </div>
+    `).join('');
+    historyDiv.innerHTML = historyHTML;
+  }
 }
 
 function calculateGMI(drillGPS, drillDuration, benchmark) {
@@ -2306,6 +2410,52 @@ updateGPSBenchmarkDropdown();
       renderDrillLibrary();
     }
   } catch(e) {}
+  
+  // Restore GPS benchmarks
+  try {
+    const gpsRes = await storage.get(GPS_BENCHMARKS_KEY);
+    if (gpsRes && gpsRes.value) {
+      const restored = JSON.parse(gpsRes.value);
+      if (restored && restored.history && Array.isArray(restored.history)) {
+        matchGPSBenchmarks = restored;
+        updateGPSBenchmarkDropdown();
+      }
+    }
+  } catch(e) {
+    // Fallback to localStorage if window.storage fails
+    try {
+      const localData = localStorage.getItem(GPS_BENCHMARKS_KEY);
+      if (localData) {
+        const restored = JSON.parse(localData);
+        if (restored && restored.history && Array.isArray(restored.history)) {
+          matchGPSBenchmarks = restored;
+          updateGPSBenchmarkDropdown();
+        }
+      }
+    } catch(e2) {}
+  }
+  
+  // Restore training drills
+  try {
+    const drillsRes = await storage.get(TRAINING_DRILLS_KEY);
+    if (drillsRes && drillsRes.value) {
+      const restored = JSON.parse(drillsRes.value);
+      if (restored && Array.isArray(restored)) {
+        trainingDrills = restored;
+      }
+    }
+  } catch(e) {
+    // Fallback to localStorage
+    try {
+      const localData = localStorage.getItem(TRAINING_DRILLS_KEY);
+      if (localData) {
+        const restored = JSON.parse(localData);
+        if (restored && Array.isArray(restored)) {
+          trainingDrills = restored;
+        }
+      }
+    } catch(e2) {}
+  }
 })();
 </script>
 </body>
