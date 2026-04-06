@@ -1607,66 +1607,253 @@ function parseDrillPDF(pageTexts,statusEl,resultsEl,listEl) {
   function med(arr){if(!arr.length)return 0;const s=arr.slice().sort((a,b)=>a-b),m=Math.floor(s.length/2);return s.length%2?s[m]:(s[m-1]+s[m])/2;}
   function isMMSS(s){return /^\d{1,2}:\d{2}$/.test((s||'').trim());}
   function toLines(items){const lines=[];items.forEach(item=>{for(let i=0;i<lines.length;i++){if(Math.abs(lines[i].y-item.y)<=3){lines[i].tokens.push(item);return;}}lines.push({y:item.y,tokens:[item]});});return lines.sort((a,b)=>b.y-a.y);}
+  function extractText(page){return page.map(t=>t.text).join(' ');}
 
-  const repData={};
-  if(pageTexts.length>0){
-    const lines1=toLines(pageTexts[0]);
-    let headerY=-1;
-    lines1.forEach(line=>{const texts=line.tokens.map(t=>t.text.trim()).filter(Boolean);if(texts.indexOf('Drills')>=0)headerY=line.y;});
-    lines1.forEach(line=>{
-      if(headerY>0&&line.y>=headerY)return;
-      const tokens=line.tokens.slice().sort((a,b)=>a.x-b.x),texts=tokens.map(t=>t.text.trim()).filter(Boolean);
-      if(texts.length<3)return;
-      const mmssVals=texts.filter(isMMSS);if(mmssVals.length<2)return;
-      const nameTokens=[];let hitFirst=false;
-      texts.forEach(t=>{if(!hitFirst&&isMMSS(t)){hitFirst=true;return;}if(!hitFirst&&isNaN(parseFloat(t)))nameTokens.push(t);});
-      const repName=nameTokens.join(' ').trim();if(!repName||repName.length<3)return;
-      const bipSecs=mmssToSecs(mmssVals[0]),bopSecs=mmssToSecs(mmssVals[mmssVals.length-1]);if(!bipSecs)return;
-      const canonical=repName.replace(/\s*-\s*\d+(\.\d+)?\s*$/,'').trim();
-      if(!repData[canonical])repData[canonical]={binCounts:[0,0,0,0,0,0,0,0],bops:[],bipSecs:[]};
-      repData[canonical].binCounts[getBin(bipSecs)]++;
-      repData[canonical].bipSecs.push(bipSecs);
-      if(bopSecs>0&&bopSecs<600)repData[canonical].bops.push(bopSecs);
+  // Detect PDF type: STATSports training report or Sportscode MCP
+  const fullText = pageTexts.map(extractText).join(' ');
+  const isSTATSports = fullText.indexOf('BALL IN PLAY REPORT') >= 0 || fullText.indexOf('BALL ROLLING') >= 0;
+
+  if (isSTATSports) {
+    // STATSports Training GPS Report Parser
+    const results = [];
+    const SKIP = ['Warm Up','WarmUp','Total','TOTAL','AVERAGES','Skills'];
+    
+    // Find the summary page (contains "BALL IN PLAY REPORT")
+    let summaryPageIdx = -1;
+    for (let i = 0; i < pageTexts.length; i++) {
+      if (extractText(pageTexts[i]).indexOf('BALL IN PLAY REPORT') >= 0) {
+        summaryPageIdx = i;
+        break;
+      }
+    }
+    
+    if (summaryPageIdx < 0) {
+      statusEl.textContent = 'STATSports format detected but no drill summary found.';
+      return;
+    }
+    
+    // Parse summary table (drill totals with GPS data)
+    const summaryLines = toLines(pageTexts[summaryPageIdx]);
+    summaryLines.forEach(line => {
+      const tokens = line.tokens.slice().sort((a,b) => a.x - b.x);
+      const texts = tokens.map(t => t.text.trim()).filter(Boolean);
+      
+      // Look for rows with AM/PM timestamps
+      if (!texts.some(t => /[AP]M$/.test(t))) return;
+      
+      // Extract drill name (before first AM/PM)
+      const nameTokens = [];
+      for (let i = 0; i < texts.length; i++) {
+        if (/[AP]M$/.test(texts[i])) break;
+        if (!/^\d+$/.test(texts[i])) nameTokens.push(texts[i]);
+      }
+      const drillName = nameTokens.join(' ').trim();
+      if (!drillName || SKIP.some(s => drillName.indexOf(s) >= 0)) return;
+      
+      // Extract times (format: HH:MM or H:MM:SS)
+      const mmssVals = texts.filter(isMMSS);
+      if (mmssVals.length < 2) return;
+      
+      const totalTimeMins = mmssToSecs(mmssVals[0]) / 60;
+      const bipTimeMins = mmssToSecs(mmssVals[1]) / 60;
+      
+      // Extract GPS metrics (remaining numeric values after times)
+      const numericVals = [];
+      let foundTimes = 0;
+      for (let i = 0; i < texts.length; i++) {
+        if (isMMSS(texts[i])) {
+          foundTimes++;
+          if (foundTimes >= 2) continue; // Skip past first 2 time values
+        }
+        const val = parseFloat(texts[i]);
+        if (!isNaN(val) && foundTimes >= 2) numericVals.push(val);
+      }
+      
+      // STATSports column order: Total Dist, Dist/min, HSR, HSR/min, vHSR, vHSR/min, HMLD, HMLD/min, Accels, Accels/min, Decels
+      const gps = {};
+      if (numericVals.length >= 11) {
+        gps.totalDist = Math.round(numericVals[0]);
+        gps.hsr = Math.round(numericVals[2]);
+        gps.vHSR = Math.round(numericVals[4]);
+        gps.hmld = parseFloat(numericVals[6].toFixed(1));
+        gps.accels = Math.round(numericVals[8]);
+        gps.decels = Math.round(numericVals[10]);
+        gps.maxVel = null; // Not in summary table
+      }
+      
+      results.push({
+        name: drillName,
+        totalMins: parseFloat(totalTimeMins.toFixed(1)),
+        bipMins: parseFloat(bipTimeMins.toFixed(1)),
+        medBOPsecs: 0, // Will calculate from rep data
+        repCount: 0,
+        binCounts: [0,0,0,0,0,0,0,0],
+        gps: gps
+      });
     });
-  }
+    
+    // Parse rep-level data from "Drills" page (Page 2) if available
+    let repsPageIdx = -1;
+    for (let i = 0; i < pageTexts.length; i++) {
+      const txt = extractText(pageTexts[i]);
+      if (txt.indexOf('Drill Duration') >= 0 && txt.indexOf('Ball Out Of Play Duration') >= 0) {
+        repsPageIdx = i;
+        break;
+      }
+    }
+    
+    if (repsPageIdx >= 0) {
+      const repsData = {};
+      const repsLines = toLines(pageTexts[repsPageIdx]);
+      
+      repsLines.forEach(line => {
+        const tokens = line.tokens.slice().sort((a,b) => a.x - b.x);
+        const texts = tokens.map(t => t.text.trim()).filter(Boolean);
+        
+        // Look for rows with drill name and two MM:SS values (BIP duration and BOP duration)
+        const mmssVals = texts.filter(isMMSS);
+        if (mmssVals.length < 2) return;
+        
+        // Extract rep name (tokens before first MM:SS)
+        const nameTokens = [];
+        for (let i = 0; i < texts.length; i++) {
+          if (isMMSS(texts[i])) break;
+          nameTokens.push(texts[i]);
+        }
+        const repName = nameTokens.join(' ').trim();
+        if (!repName || repName.length < 3) return;
+        
+        const bipSecs = mmssToSecs(mmssVals[0]);
+        const bopSecs = mmssToSecs(mmssVals[mmssVals.length - 1]);
+        
+        // Canonicalize drill name (remove rep numbers like "- 1.1")
+        const canonical = repName.replace(/\s*-\s*\d+(\.\d+)?\s*$/, '').trim();
+        
+        if (!repsData[canonical]) {
+          repsData[canonical] = {binCounts: [0,0,0,0,0,0,0,0], bops: [], bipSecs: []};
+        }
+        
+        repsData[canonical].binCounts[getBin(bipSecs)]++;
+        repsData[canonical].bipSecs.push(bipSecs);
+        if (bopSecs > 0 && bopSecs < 600) repsData[canonical].bops.push(bopSecs);
+      });
+      
+      // Match reps data to drill summaries
+      results.forEach(drill => {
+        let matchKey = null, bestScore = 0;
+        Object.keys(repsData).forEach(k => {
+          const n1 = drill.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+          const n2 = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+          let score = 0;
+          if (n2.indexOf(n1) >= 0 || n1.indexOf(n2) >= 0) {
+            score = Math.min(n1.length, n2.length);
+          }
+          if (score > bestScore) {
+            bestScore = score;
+            matchKey = k;
+          }
+        });
+        
+        if (matchKey && repsData[matchKey]) {
+          drill.binCounts = repsData[matchKey].binCounts;
+          drill.medBOPsecs = Math.round(med(repsData[matchKey].bops));
+          drill.repCount = repsData[matchKey].bipSecs.length;
+        }
+      });
+    }
+    
+    if (!results.length) {
+      statusEl.textContent = 'No drills found in STATSports report.';
+      return;
+    }
+    
+    statusEl.textContent = results.length + ' drill' + (results.length !== 1 ? 's' : '') + ' found (STATSports format)';
+    
+    listEl.innerHTML = results.map((d, i) => {
+      const bipPct = d.totalMins > 0 ? Math.round((d.bipMins / d.totalMins) * 100) : 0;
+      const binSummary = ['0-15s','15-30s','30-60s','60-90s','90-120s','120-150s','150-200s','200+s']
+        .map((lbl, bi) => d.binCounts[bi] > 0 ? d.binCounts[bi] + '× ' + lbl : null)
+        .filter(Boolean).join(', ');
+      const gpsInfo = d.gps && d.gps.totalDist ? 
+        `<div style="font-size:10px;color:#888;margin-top:3px;">GPS: ${d.gps.totalDist}m dist, ${d.gps.hsr}m HSR, ${d.gps.hmld} HMLD, ${d.gps.accels}/${d.gps.decels} A/D</div>` : '';
+      return `<div style="padding:10px 12px;background:var(--panel2);border:1px solid var(--border);border-radius:3px;cursor:pointer;transition:border-color 0.15s;" onclick="loadPDFDrill(${i})" onmouseover="this.style.borderColor='rgba(52,152,219,0.5)'" onmouseout="this.style.borderColor='var(--border)'">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="flex:1;">
+            <div style="font-weight:600;font-size:13px;">${d.name}</div>
+            <div style="font-size:11px;color:#777;margin-top:3px;">${d.repCount} rep${d.repCount !== 1 ? 's' : ''} · ${d.totalMins}min · BIP ${d.bipMins}min (${bipPct}%)${d.medBOPsecs ? ' · Med BOP ' + d.medBOPsecs + 's' : ''}</div>
+            ${binSummary ? '<div style="font-size:10px;color:#555;margin-top:3px;">Bins: ' + binSummary + '</div>' : ''}
+            ${gpsInfo}
+          </div>
+          <div style="font-size:10px;letter-spacing:1px;color:#3498DB;font-weight:700;flex-shrink:0;">LOAD →</div>
+        </div>
+      </div>`;
+    }).join('');
+    
+    window._pdfDrillResults = results;
+    resultsEl.style.display = 'block';
+    
+  } else {
+    // Original Sportscode MCP parser
+    const repData={};
+    if(pageTexts.length>0){
+      const lines1=toLines(pageTexts[0]);
+      let headerY=-1;
+      lines1.forEach(line=>{const texts=line.tokens.map(t=>t.text.trim()).filter(Boolean);if(texts.indexOf('Drills')>=0)headerY=line.y;});
+      lines1.forEach(line=>{
+        if(headerY>0&&line.y>=headerY)return;
+        const tokens=line.tokens.slice().sort((a,b)=>a.x-b.x),texts=tokens.map(t=>t.text.trim()).filter(Boolean);
+        if(texts.length<3)return;
+        const mmssVals=texts.filter(isMMSS);if(mmssVals.length<2)return;
+        const nameTokens=[];let hitFirst=false;
+        texts.forEach(t=>{if(!hitFirst&&isMMSS(t)){hitFirst=true;return;}if(!hitFirst&&isNaN(parseFloat(t)))nameTokens.push(t);});
+        const repName=nameTokens.join(' ').trim();if(!repName||repName.length<3)return;
+        const bipSecs=mmssToSecs(mmssVals[0]),bopSecs=mmssToSecs(mmssVals[mmssVals.length-1]);if(!bipSecs)return;
+        const canonical=repName.replace(/\s*-\s*\d+(\.\d+)?\s*$/,'').trim();
+        if(!repData[canonical])repData[canonical]={binCounts:[0,0,0,0,0,0,0,0],bops:[],bipSecs:[]};
+        repData[canonical].binCounts[getBin(bipSecs)]++;
+        repData[canonical].bipSecs.push(bipSecs);
+        if(bopSecs>0&&bopSecs<600)repData[canonical].bops.push(bopSecs);
+      });
+    }
 
-  const drillTotals={},SKIP=['Warm Up','WarmUp','Total','TOTAL','Skills','skills','BIP','#DIV'];
-  if(pageTexts.length>1){
-    const lines2=toLines(pageTexts[1]);
-    lines2.forEach(line=>{
-      const tokens=line.tokens.slice().sort((a,b)=>a.x-b.x),texts=tokens.map(t=>t.text.trim()).filter(Boolean);
-      if(!texts.some(t=>/[AP]M$/.test(t)))return;
-      const mmssVals=texts.filter(isMMSS);if(mmssVals.length<2)return;
-      const nameTokens=[];let pastName=false;
-      texts.forEach(t=>{if(/[AP]M$/.test(t)){pastName=true;return;}if(!pastName&&!/^\d+$/.test(t))nameTokens.push(t);});
-      const drillName=nameTokens.join(' ').trim();
-      if(!drillName||SKIP.some(s=>drillName.indexOf(s)>=0))return;
-      const totalSecs=mmssToSecs(mmssVals[0]),bipSecs=mmssToSecs(mmssVals[1]);
-      if(!totalSecs||!bipSecs)return;
-      drillTotals[drillName]={totalSecs,bipSecs,gps:{}};
+    const drillTotals={},SKIP=['Warm Up','WarmUp','Total','TOTAL','Skills','skills','BIP','#DIV'];
+    if(pageTexts.length>1){
+      const lines2=toLines(pageTexts[1]);
+      lines2.forEach(line=>{
+        const tokens=line.tokens.slice().sort((a,b)=>a.x-b.x),texts=tokens.map(t=>t.text.trim()).filter(Boolean);
+        if(!texts.some(t=>/[AP]M$/.test(t)))return;
+        const mmssVals=texts.filter(isMMSS);if(mmssVals.length<2)return;
+        const nameTokens=[];let pastName=false;
+        texts.forEach(t=>{if(/[AP]M$/.test(t)){pastName=true;return;}if(!pastName&&!/^\d+$/.test(t))nameTokens.push(t);});
+        const drillName=nameTokens.join(' ').trim();
+        if(!drillName||SKIP.some(s=>drillName.indexOf(s)>=0))return;
+        const totalSecs=mmssToSecs(mmssVals[0]),bipSecs=mmssToSecs(mmssVals[1]);
+        if(!totalSecs||!bipSecs)return;
+        drillTotals[drillName]={totalSecs,bipSecs,gps:{}};
+      });
+    }
+
+    const results=[];
+    Object.keys(drillTotals).forEach(name=>{
+      const tot=drillTotals[name];
+      let matchKey=null,bestScore=0;
+      Object.keys(repData).forEach(k=>{const n1=name.toLowerCase().replace(/[^a-z0-9]/g,''),n2=k.toLowerCase().replace(/[^a-z0-9]/g,'');let score=0;if(n2.indexOf(n1)>=0||n1.indexOf(n2)>=0)score=Math.min(n1.length,n2.length);if(score>bestScore){bestScore=score;matchKey=k;}});
+      let binCounts=[0,0,0,0,0,0,0,0],medBOPsecs=0,repCount=0;
+      if(matchKey&&repData[matchKey]){binCounts=repData[matchKey].binCounts;medBOPsecs=Math.round(med(repData[matchKey].bops));repCount=repData[matchKey].bipSecs.length;}
+      results.push({name,totalMins:parseFloat((tot.totalSecs/60).toFixed(1)),bipMins:parseFloat((tot.bipSecs/60).toFixed(1)),medBOPsecs,repCount,binCounts,gps:tot.gps||{}});
     });
+
+    if(!results.length){statusEl.textContent='No drills found. Confirm this is a valid drill PDF.';return;}
+    statusEl.textContent=results.length+' drill group'+(results.length!==1?'s':'')+' found (Sportscode format)';
+
+    listEl.innerHTML=results.map((d,i)=>{
+      const bipPct=d.totalMins>0?Math.round((d.bipMins/d.totalMins)*100):0;
+      const binSummary=['0-15s','15-30s','30-60s','60-90s','90-120s','120-150s','150-200s','200+s'].map((lbl,bi)=>d.binCounts[bi]>0?d.binCounts[bi]+'× '+lbl:null).filter(Boolean).join(', ');
+      return `<div style="padding:10px 12px;background:var(--panel2);border:1px solid var(--border);border-radius:3px;cursor:pointer;transition:border-color 0.15s;" onclick="loadPDFDrill(${i})" onmouseover="this.style.borderColor='rgba(52,152,219,0.5)'" onmouseout="this.style.borderColor='var(--border)'"><div style="display:flex;align-items:center;gap:10px;"><div style="flex:1;"><div style="font-weight:600;font-size:13px;">${d.name}</div><div style="font-size:11px;color:#777;margin-top:3px;">${d.repCount} rep${d.repCount!==1?'s':''} · ${d.totalMins}min · BIP ${d.bipMins}min (${bipPct}%)${d.medBOPsecs?' · Med BOP '+d.medBOPsecs+'s':''}</div>${binSummary?'<div style="font-size:10px;color:#555;margin-top:3px;">Bins: '+binSummary+'</div>':''}</div><div style="font-size:10px;letter-spacing:1px;color:#3498DB;font-weight:700;flex-shrink:0;">LOAD →</div></div></div>`;
+    }).join('');
+    window._pdfDrillResults=results;
+    resultsEl.style.display='block';
   }
-
-  const results=[];
-  Object.keys(drillTotals).forEach(name=>{
-    const tot=drillTotals[name];
-    let matchKey=null,bestScore=0;
-    Object.keys(repData).forEach(k=>{const n1=name.toLowerCase().replace(/[^a-z0-9]/g,''),n2=k.toLowerCase().replace(/[^a-z0-9]/g,'');let score=0;if(n2.indexOf(n1)>=0||n1.indexOf(n2)>=0)score=Math.min(n1.length,n2.length);if(score>bestScore){bestScore=score;matchKey=k;}});
-    let binCounts=[0,0,0,0,0,0,0,0],medBOPsecs=0,repCount=0;
-    if(matchKey&&repData[matchKey]){binCounts=repData[matchKey].binCounts;medBOPsecs=Math.round(med(repData[matchKey].bops));repCount=repData[matchKey].bipSecs.length;}
-    results.push({name,totalMins:parseFloat((tot.totalSecs/60).toFixed(1)),bipMins:parseFloat((tot.bipSecs/60).toFixed(1)),medBOPsecs,repCount,binCounts,gps:tot.gps||{}});
-  });
-
-  if(!results.length){statusEl.textContent='No drills found. Confirm this is a GPS session report PDF.';return;}
-  statusEl.textContent=results.length+' drill group'+(results.length!==1?'s':'')+' found from PDF.';
-
-  listEl.innerHTML=results.map((d,i)=>{
-    const bipPct=d.totalMins>0?Math.round((d.bipMins/d.totalMins)*100):0;
-    const binSummary=['0-15s','15-30s','30-60s','60-90s','90-120s','120-150s','150-200s','200+s'].map((lbl,bi)=>d.binCounts[bi]>0?d.binCounts[bi]+'× '+lbl:null).filter(Boolean).join(', ');
-    return `<div style="padding:10px 12px;background:var(--panel2);border:1px solid var(--border);border-radius:3px;cursor:pointer;transition:border-color 0.15s;" onclick="loadPDFDrill(${i})" onmouseover="this.style.borderColor='rgba(52,152,219,0.5)'" onmouseout="this.style.borderColor='var(--border)'"><div style="display:flex;align-items:center;gap:10px;"><div style="flex:1;"><div style="font-weight:600;font-size:13px;">${d.name}</div><div style="font-size:11px;color:#777;margin-top:3px;">${d.repCount} rep${d.repCount!==1?'s':''} · ${d.totalMins}min · BIP ${d.bipMins}min (${bipPct}%)${d.medBOPsecs?' · Med BOP '+d.medBOPsecs+'s':''}</div>${binSummary?'<div style="font-size:10px;color:#555;margin-top:3px;">Bins: '+binSummary+'</div>':''}</div><div style="font-size:10px;letter-spacing:1px;color:#3498DB;font-weight:700;flex-shrink:0;">LOAD →</div></div></div>`;
-  }).join('');
-  window._pdfDrillResults=results;
-  resultsEl.style.display='block';
 }
 
 function loadPDFDrill(idx) {
@@ -1676,6 +1863,21 @@ function loadPDFDrill(idx) {
   document.getElementById('drill-bip').value=d.bipMins;
   if(d.medBOPsecs>0)document.getElementById('drill-median-bop').value=d.medBOPsecs;
   if(d.binCounts&&d.binCounts.length===8)d.binCounts.forEach((count,i)=>{const el=document.getElementById('b'+i);if(el)el.value=count>0?count:'';});
+  
+  // Auto-populate GPS fields if available (STATSports data)
+  if(d.gps && Object.keys(d.gps).length > 0) {
+    if(d.gps.totalDist) document.getElementById('drill-totaldist').value = d.gps.totalDist;
+    if(d.gps.hsr) document.getElementById('drill-hsr').value = d.gps.hsr;
+    if(d.gps.hmld) document.getElementById('drill-hmld').value = d.gps.hmld;
+    if(d.gps.maxVel) document.getElementById('drill-maxvel').value = d.gps.maxVel;
+    if(d.gps.accels) document.getElementById('drill-accels').value = d.gps.accels;
+    if(d.gps.decels) document.getElementById('drill-decels').value = d.gps.decels;
+    
+    // Show GPS section and enable GMI calculation
+    document.getElementById('gps-inputs-section').style.display = 'block';
+    document.getElementById('gps-toggle').checked = true;
+  }
+  
   window._pendingGPS=d.gps||{};
   document.getElementById('pdf-drill-status').textContent='Loaded "'+d.name+'" – '+d.repCount+' reps. Review then click Calculate.';
   showToast('Loaded "'+d.name+'" – all fields pre-filled');
