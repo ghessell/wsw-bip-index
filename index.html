@@ -2059,14 +2059,18 @@ function renderGPSStats(text, filename) {
         <table style="width:100%;border-collapse:collapse;font-size:11px;">
           <thead>
             <tr style="border-bottom:1px solid var(--border);">
-              <th style="padding:6px 8px;text-align:left;color:var(--muted);">Player</th>
-              <th style="padding:6px 8px;text-align:center;color:var(--muted);">%</th>
-              <th style="padding:6px 8px;text-align:right;color:var(--muted);">Dist (m)</th>
-              <th style="padding:6px 8px;text-align:right;color:var(--muted);">HSR (m)</th>
-              <th style="padding:6px 8px;text-align:right;color:var(--muted);">vHSR (m)</th>
+              <th style="padding:6px 8px;text-align:left;color:var(--muted);">Player Name</th>
+              <th style="padding:6px 8px;text-align:center;color:var(--muted);">Game %<br/>Played</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--muted);">Total<br/>Distance (m)</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--muted);">HSR (m)<br/>>5.5m/s</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--muted);">vHSR (m)<br/>>7m/s</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--muted);">MAX Velocity<br/>(m/s)</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--muted);">Max V<br/>km/h</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--muted);">MAX Velocity<br/>%</th>
               <th style="padding:6px 8px;text-align:right;color:var(--muted);">HMLD</th>
-              <th style="padding:6px 8px;text-align:right;color:var(--muted);">Accels</th>
-              <th style="padding:6px 8px;text-align:right;color:var(--muted);">Decels</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--muted);">HMLD/MIN</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--muted);">Intense<br/>Accels<br/>>2.5m/s/s</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--muted);">Intense<br/>Decels<br/>>2.5m/s/s</th>
             </tr>
           </thead>
           <tbody>
@@ -2077,7 +2081,11 @@ function renderGPSStats(text, filename) {
                 <td style="padding:6px 8px;text-align:right;">${p.dist}</td>
                 <td style="padding:6px 8px;text-align:right;">${p.hsr}</td>
                 <td style="padding:6px 8px;text-align:right;">${p.vhsr}</td>
+                <td style="padding:6px 8px;text-align:right;color:#3498DB;">${p.maxV}</td>
+                <td style="padding:6px 8px;text-align:right;color:#777;">${p.maxVkmh}</td>
+                <td style="padding:6px 8px;text-align:right;color:#777;">${p.maxVpct}</td>
                 <td style="padding:6px 8px;text-align:right;">${p.hmld}</td>
+                <td style="padding:6px 8px;text-align:right;">${p.hmldMin}</td>
                 <td style="padding:6px 8px;text-align:right;color:#3498DB;">${p.accels}</td>
                 <td style="padding:6px 8px;text-align:right;color:#E67E22;">${p.decels}</td>
               </tr>
