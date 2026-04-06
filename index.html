@@ -1974,19 +1974,19 @@ function renderGPSStats(text, filename) {
   
   // Display summary stats
   const stats = [
-    {label: 'Match Duration', val: gameMatch ? gameMatch[1] : '—', unit: ''},
-    {label: 'Total Distance', val: totalDist, unit: 'm'},
-    {label: 'HSR Distance', val: totalHSR, unit: 'm'},
-    {label: 'vHSR Distance', val: totalvHSR, unit: 'm'},
-    {label: 'Max Velocity', val: maxVelocity, unit: 'm/s'},
-    {label: 'HMLD', val: totalHMLD, unit: ''},
-    {label: 'HMLD/MIN', val: totalHMLDmin, unit: ''},
-    {label: 'Intense Accels', val: totalAccels, unit: ''},
-    {label: 'Intense Decels', val: totalDecels, unit: ''},
+    {label: 'Match Duration', val: gameMatch ? gameMatch[1] : '—'},
+    {label: 'Total Distance', val: totalDist},
+    {label: 'HSR Distance', val: totalHSR},
+    {label: 'vHSR Distance', val: totalvHSR},
+    {label: 'Max Velocity', val: maxVelocity},
+    {label: 'HMLD', val: totalHMLD},
+    {label: 'HMLD/MIN', val: totalHMLDmin},
+    {label: 'Intense Accels', val: totalAccels},
+    {label: 'Intense Decels', val: totalDecels},
   ];
   
   statGrid.innerHTML = stats.map(s => 
-    `<div class="gps-stat-cell"><div class="gps-stat-val">${s.val}${s.val!=='—'&&s.unit?' <span style="font-size:12px;font-weight:400;">${s.unit}</span>':''}</div><div class="gps-stat-lbl">${s.label}</div></div>`
+    `<div class="gps-stat-cell"><div class="gps-stat-val">${s.val}</div><div class="gps-stat-lbl">${s.label}</div></div>`
   ).join('');
   
   // Extract player table - look for STARTING XI section
@@ -2021,20 +2021,31 @@ function renderGPSStats(text, filename) {
         const [, name, gamePct, dist, hsr, vhsr] = playerMatch;
         // Extract remaining numbers from line
         const nums = line.replace(name, '').trim().split(/\s+/).filter(s => /^[\d.%]+$/.test(s));
-        if (nums.length >= 10) {
+        
+        // Handle missing columns by position (Sattout case: missing km/h value)
+        // Expected order: gamePct, dist, hsr, vhsr, maxVel(m/s), maxVel(km/h), maxVel%, HMLD, HMLD/min, Accels, Decels
+        if (nums.length >= 9) {
+          // If we have <11 values, check if maxVel km/h is missing (value around 25-35 after m/s value 7-10)
+          let adjusted = [...nums];
+          if (nums.length === 10) {
+            // Missing one value - likely km/h
+            // Insert placeholder after m/s value (index 4)
+            adjusted.splice(5, 0, '—');
+          }
+          
           playerRows.push({
             name,
-            gamePct: nums[0],
-            dist: nums[1],
-            hsr: nums[2],
-            vhsr: nums[3],
-            maxV: nums[4] || '—',
-            maxVkmh: nums[5] || '—',
-            maxVpct: nums[6] || '—',
-            hmld: nums[7] || '—',
-            hmldMin: nums[8] || '—',
-            accels: nums[9] || '—',
-            decels: nums[10] || '—',
+            gamePct: adjusted[0],
+            dist: adjusted[1],
+            hsr: adjusted[2],
+            vhsr: adjusted[3],
+            maxV: adjusted[4] || '—',
+            maxVkmh: adjusted[5] || '—',
+            maxVpct: adjusted[6] || '—',
+            hmld: adjusted[7] || '—',
+            hmldMin: adjusted[8] || '—',
+            accels: adjusted[9] || '—',
+            decels: adjusted[10] || '—',
           });
         }
       }
