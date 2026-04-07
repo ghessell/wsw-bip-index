@@ -2320,15 +2320,52 @@ function parseDrillPDF(pageTexts,statusEl,resultsEl,listEl) {
 }
 
 function loadPDFDrill(idx) {
-  const d=window._pdfDrillResults[idx];if(!d)return;
+  const d=window._pdfDrillResults[idx];
+  if(!d) {
+    console.error('No drill data found for index:', idx);
+    return;
+  }
+  
+  console.log('Loading drill:', d.name, 'with data:', d);
+  
+  // Populate basic drill info
   document.getElementById('drill-name').value=d.name;
   document.getElementById('drill-duration').value=d.totalMins;
   document.getElementById('drill-bip').value=d.bipMins;
-  if(d.medBOPsecs>0)document.getElementById('drill-median-bop').value=d.medBOPsecs;
-  if(d.binCounts&&d.binCounts.length===8)d.binCounts.forEach((count,i)=>{const el=document.getElementById('b'+i);if(el)el.value=count>0?count:'';});
+  
+  // Populate median BOP
+  if(d.medBOPsecs>0) {
+    document.getElementById('drill-median-bop').value=d.medBOPsecs;
+    console.log('Set median BOP:', d.medBOPsecs);
+  } else {
+    document.getElementById('drill-median-bop').value='';
+  }
+  
+  // Populate bin counts
+  if(d.binCounts&&d.binCounts.length===8) {
+    console.log('Populating bins:', d.binCounts);
+    d.binCounts.forEach((count,i)=>{
+      const el=document.getElementById('b'+i);
+      if(el) {
+        el.value=count>0?count:'0';
+        console.log(`  Bin ${i} (b${i}):`, count);
+      } else {
+        console.error(`  Bin input b${i} not found!`);
+      }
+    });
+    
+    // Show bins auto-fill indicator
+    const indicator = document.getElementById('bins-autofill-status');
+    if (indicator) {
+      indicator.textContent = '✓ Loaded from GPS';
+      indicator.style.display = 'inline';
+      indicator.style.color = '#27AE60';
+    }
+  }
   
   // Auto-populate GPS fields if available (STATSports data)
   if(d.gps && Object.keys(d.gps).length > 0) {
+    console.log('Populating GPS data:', d.gps);
     if(d.gps.totalDist) document.getElementById('drill-totaldist').value = d.gps.totalDist;
     if(d.gps.hsr) document.getElementById('drill-hsr').value = d.gps.hsr;
     if(d.gps.hmld) document.getElementById('drill-hmld').value = d.gps.hmld;
@@ -2336,14 +2373,30 @@ function loadPDFDrill(idx) {
     if(d.gps.accels) document.getElementById('drill-accels').value = d.gps.accels;
     if(d.gps.decels) document.getElementById('drill-decels').value = d.gps.decels;
     
-    // Show GPS section and enable GMI calculation
-    document.getElementById('gps-inputs-section').style.display = 'block';
-    document.getElementById('gps-toggle').checked = true;
+    // Show GPS section
+    const gpsSection = document.getElementById('gps-inputs-section');
+    if(gpsSection) gpsSection.style.display = 'block';
   }
   
   window._pendingGPS=d.gps||{};
-  document.getElementById('pdf-drill-status').textContent='Loaded "'+d.name+'" – '+d.repCount+' reps. Review then click Calculate.';
-  showToast('Loaded "'+d.name+'" – all fields pre-filled');
+  
+  // Show status message
+  const statusEl = document.getElementById('pdf-drill-status');
+  if(statusEl) {
+    statusEl.textContent='✓ Loaded "'+d.name+'" – '+d.repCount+' reps, '+d.totalMins+'min, BIP '+d.bipMins+'min, Med BOP '+d.medBOPsecs+'s';
+    statusEl.style.color = '#27AE60';
+  }
+  
+  // Show success toast
+  showToast('✓ Loaded "'+d.name+'" with ' + d.repCount + ' reps');
+  
+  // Scroll to drill details form
+  setTimeout(() => {
+    const drillNameInput = document.getElementById('drill-name');
+    if(drillNameInput) {
+      drillNameInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, 100);
 }
 
 // ========== GPS REPORT READER ==========
