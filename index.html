@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- WSW BIP Profile Index v8.0 - Build 2026-04-07-19:15 PRODUCTION -->
+<!-- WSW BIP Profile Index - Production v8.0 | Last Updated: 2026-04-07 19:15 -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -7,7 +7,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>WSW BIP Profile Index v8.0</title>
+<title>WSW BIP Profile Index</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;600;700;900&family=Barlow:wght@300;400;500;600&display=swap');
 
@@ -2199,30 +2199,77 @@ function parseDrillPDF(pageTexts,statusEl,resultsEl,listEl) {
       console.log('Drill summaries count:', results.length);
       console.log('Rep data keys:', Object.keys(repsData));
       
+      const finalResults = [];
+      
       results.forEach(drill => {
-        let matchKey = null, bestScore = 0;
+        // Find ALL rep keys that match this drill summary
+        const matchingKeys = [];
         Object.keys(repsData).forEach(k => {
           const n1 = drill.name.toLowerCase().replace(/[^a-z0-9]/g, '');
           const n2 = k.toLowerCase().replace(/[^a-z0-9]/g, '');
-          let score = 0;
+          
+          // Check if they match (substring containment)
           if (n2.indexOf(n1) >= 0 || n1.indexOf(n2) >= 0) {
-            score = Math.min(n1.length, n2.length);
-          }
-          if (score > bestScore) {
-            bestScore = score;
-            matchKey = k;
+            matchingKeys.push(k);
           }
         });
         
-        if (matchKey && repsData[matchKey]) {
+        if (matchingKeys.length === 0) {
+          console.log(`✗ No match for "${drill.name}"`);
+          finalResults.push(drill);
+        } else if (matchingKeys.length === 1) {
+          // Simple 1:1 match
+          const matchKey = matchingKeys[0];
+          drill.name = matchKey; // Use the more specific name with set notation
           drill.binCounts = repsData[matchKey].binCounts;
           drill.medBOPsecs = Math.round(med(repsData[matchKey].bops));
           drill.repCount = repsData[matchKey].bipSecs.length;
-          console.log(`✓ Matched "${drill.name}" → "${matchKey}" (${drill.repCount} reps, median BOP ${drill.medBOPsecs}s)`);
+          console.log(`✓ Matched "${drill.name}" (${drill.repCount} reps, median BOP ${drill.medBOPsecs}s)`);
+          finalResults.push(drill);
         } else {
-          console.log(`✗ No match for "${drill.name}"`);
+          // Multiple sets found - split the summary
+          console.log(`✓ Found ${matchingKeys.length} sets for "${drill.name}":`, matchingKeys);
+          
+          // Calculate total BIP time across all sets
+          let totalBipSecs = 0;
+          matchingKeys.forEach(k => {
+            const setBipSecs = repsData[k].bipSecs.reduce((sum, v) => sum + v, 0);
+            totalBipSecs += setBipSecs;
+          });
+          
+          // Create one drill entry per set, split GPS proportionally
+          matchingKeys.forEach(setKey => {
+            const setBipSecs = repsData[setKey].bipSecs.reduce((sum, v) => sum + v, 0);
+            const setFraction = setBipSecs / totalBipSecs;
+            
+            const setDrill = {
+              name: setKey,
+              totalMins: parseFloat((drill.totalMins * setFraction).toFixed(1)),
+              bipMins: parseFloat((setBipSecs / 60).toFixed(1)),
+              medBOPsecs: Math.round(med(repsData[setKey].bops)),
+              repCount: repsData[setKey].bipSecs.length,
+              binCounts: repsData[setKey].binCounts,
+              gps: {}
+            };
+            
+            // Split GPS data proportionally
+            if (drill.gps.totalDist) setDrill.gps.totalDist = Math.round(drill.gps.totalDist * setFraction);
+            if (drill.gps.hsr) setDrill.gps.hsr = Math.round(drill.gps.hsr * setFraction);
+            if (drill.gps.vHSR) setDrill.gps.vHSR = Math.round(drill.gps.vHSR * setFraction);
+            if (drill.gps.hmld) setDrill.gps.hmld = parseFloat((drill.gps.hmld * setFraction).toFixed(1));
+            if (drill.gps.accels) setDrill.gps.accels = Math.round(drill.gps.accels * setFraction);
+            if (drill.gps.decels) setDrill.gps.decels = Math.round(drill.gps.decels * setFraction);
+            setDrill.gps.maxVel = drill.gps.maxVel; // Max velocity same for all sets
+            
+            console.log(`  → Set "${setKey}": ${setDrill.repCount} reps, ${setDrill.bipMins} BIP mins (${(setFraction*100).toFixed(0)}% of GPS)`);
+            finalResults.push(setDrill);
+          });
         }
       });
+      
+      // Replace results with final split version
+      results.length = 0;
+      results.push(...finalResults);
       
       // Extract Max Velocity from player breakdown pages
       console.log('Extracting Max Velocity from player breakdown pages...');
