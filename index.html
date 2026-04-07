@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- WSW BIP Profile Index v6.1 - Updated 2026-04-07 17:45 -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -459,36 +460,36 @@
           </div>
           <div id="gps-inputs-section" style="display:none;margin-top:12px;">
             <div style="background:rgba(52,152,219,0.08);border:1px solid rgba(52,152,219,0.2);border-radius:4px;padding:10px;margin-bottom:12px;font-size:11px;color:#5dade2;">
-              <strong>Compare drill physical output to match GPS demands.</strong> Enter GPS data from training drill to calculate GPS Match Index (GMI).
+              <strong>Compare drill physical output to match GPS demands.</strong> Enter GPS data as <strong>per-minute values</strong> to calculate GPS Match Index (GMI). When loading from training PDFs, values are auto-converted to per-minute format.
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
               <div>
-                <label class="input-label">Total Distance (meters)</label>
-                <input type="number" id="drill-totaldist" placeholder="e.g. 2400" min="0" step="1" />
+                <label class="input-label">Total Distance/min (m/min)</label>
+                <input type="number" id="drill-totaldist" placeholder="e.g. 160" min="0" step="0.1" />
               </div>
               <div>
-                <label class="input-label">HSR >5.0m/s (meters)</label>
-                <input type="number" id="drill-hsr" placeholder="e.g. 245" min="0" step="1" />
+                <label class="input-label">HSR/min >5.0m/s (m/min)</label>
+                <input type="number" id="drill-hsr" placeholder="e.g. 16.3" min="0" step="0.1" />
               </div>
               <div>
-                <label class="input-label">vHSR >7.0m/s (meters)</label>
-                <input type="number" id="drill-vhsr" placeholder="e.g. 120" min="0" step="1" />
+                <label class="input-label">vHSR/min >7.0m/s (m/min)</label>
+                <input type="number" id="drill-vhsr" placeholder="e.g. 8.0" min="0" step="0.1" />
               </div>
               <div>
-                <label class="input-label">HMLD >25.5w/kg</label>
-                <input type="number" id="drill-hmld" placeholder="e.g. 850" min="0" step="1" />
+                <label class="input-label">HMLD/min >25.5w/kg</label>
+                <input type="number" id="drill-hmld" placeholder="e.g. 5.7" min="0" step="0.1" />
               </div>
               <div>
                 <label class="input-label">Max Velocity (m/s)</label>
                 <input type="number" id="drill-maxvel" placeholder="e.g. 8.5" min="0" step="0.01" />
               </div>
               <div>
-                <label class="input-label">Intense Accels >2.5m/s²</label>
-                <input type="number" id="drill-accels" placeholder="e.g. 28" min="0" step="1" />
+                <label class="input-label">Accels/min >2.5m/s²</label>
+                <input type="number" id="drill-accels" placeholder="e.g. 1.9" min="0" step="0.1" />
               </div>
               <div>
-                <label class="input-label">Intense Decels >2.5m/s²</label>
-                <input type="number" id="drill-decels" placeholder="e.g. 35" min="0" step="1" />
+                <label class="input-label">Decels/min >2.5m/s²</label>
+                <input type="number" id="drill-decels" placeholder="e.g. 2.3" min="0" step="0.1" />
               </div>
             </div>
             <div style="margin-top:8px;">
@@ -2386,31 +2387,46 @@ function loadPDFDrill(idx) {
   }
   
   // Auto-populate GPS fields if available (STATSports data)
+  // Convert all values to per-minute for consistency with benchmarks
   if(d.gps && Object.keys(d.gps).length > 0) {
     console.log('Populating GPS data:', d.gps);
     
-    // Total values
-    if(d.gps.totalDist) document.getElementById('drill-totaldist').value = d.gps.totalDist;
-    if(d.gps.hsr) document.getElementById('drill-hsr').value = d.gps.hsr;
-    if(d.gps.vHSR) document.getElementById('drill-vhsr').value = d.gps.vHSR;
-    if(d.gps.maxVel) document.getElementById('drill-maxvel').value = d.gps.maxVel;
-    
-    // Calculate per-minute values for HMLD, Accels, Decels if not already provided
     const drillDuration = d.totalMins || 1; // Prevent division by zero
     
+    // Convert totals to per-minute values
+    if(d.gps.totalDist) {
+      const distPerMin = d.gps.totalDist / drillDuration;
+      document.getElementById('drill-totaldist').value = distPerMin.toFixed(1);
+    }
+    
+    if(d.gps.hsr) {
+      const hsrPerMin = d.gps.hsr / drillDuration;
+      document.getElementById('drill-hsr').value = hsrPerMin.toFixed(1);
+    }
+    
+    if(d.gps.vHSR) {
+      const vhsrPerMin = d.gps.vHSR / drillDuration;
+      document.getElementById('drill-vhsr').value = vhsrPerMin.toFixed(1);
+    }
+    
     if(d.gps.hmld) {
-      // HMLD is typically total, convert to per-minute if needed
-      const hmldValue = d.gps.hmld;
-      document.getElementById('drill-hmld').value = hmldValue;
+      const hmldPerMin = d.gps.hmld / drillDuration;
+      document.getElementById('drill-hmld').value = hmldPerMin.toFixed(1);
     }
     
     if(d.gps.accels) {
-      // Accels/Decels are counts, use as-is
-      document.getElementById('drill-accels').value = d.gps.accels;
+      const accelsPerMin = d.gps.accels / drillDuration;
+      document.getElementById('drill-accels').value = accelsPerMin.toFixed(1);
     }
     
     if(d.gps.decels) {
-      document.getElementById('drill-decels').value = d.gps.decels;
+      const decelsPerMin = d.gps.decels / drillDuration;
+      document.getElementById('drill-decels').value = decelsPerMin.toFixed(1);
+    }
+    
+    // Max velocity stays as-is (it's already a peak value, not a total)
+    if(d.gps.maxVel) {
+      document.getElementById('drill-maxvel').value = d.gps.maxVel;
     }
     
     // Show GPS section
@@ -2827,13 +2843,14 @@ function calculateSeasonAverage(benchmarks) {
 function calculateGMI(drillGPS, drillDuration, benchmark) {
   if (!drillGPS || !benchmark || !drillDuration || drillDuration === 0) return null;
   
-  // Calculate drill per-minute values
-  const drillTotalDistpm = drillGPS.totalDist / drillDuration;
-  const drillHSRpm = drillGPS.hsr / drillDuration;
-  const drillVHSRpm = drillGPS.vhsr / drillDuration;
-  const drillHMLDpm = drillGPS.hmld / drillDuration;
-  const drillAccelspm = drillGPS.accels / drillDuration;
-  const drillDecelspm = drillGPS.decels / drillDuration;
+  // GPS inputs are now already in per-minute format
+  // No need to divide by duration - use values directly
+  const drillTotalDistpm = drillGPS.totalDist;
+  const drillHSRpm = drillGPS.hsr;
+  const drillVHSRpm = drillGPS.vhsr;
+  const drillHMLDpm = drillGPS.hmld;
+  const drillAccelspm = drillGPS.accels;
+  const drillDecelspm = drillGPS.decels;
   const drillMaxVel = drillGPS.maxVel || 0;
   
   // Calculate similarity scores (0-100 for each component)
