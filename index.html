@@ -283,6 +283,2628 @@
   <div class="nav-right">
     <span class="data-status" id="data-status">R1–R8 hardcoded</span>
     <button class="upload-btn" onclick="document.getElementById('csv-file-input').click()">+ Upload CSV</button>
+    <button class="upload-btn" style="background:#0F9D58;border:1px solid #0B8043;color:white;" onclick="fetchFromBigQuery()" title="Fetch from Google Sheets (BigQuery export)">📊 Sync from Sheets</button>
+    <button class="upload-btn" style="background:var(--panel2);border:1px solid var(--border);color:var(--muted);" onclick="showPdfExportModal()">Export PDF</button>
+    <button class="upload-btn" style="background:var(--panel2);border:1px solid var(--border);color:var(--muted);" onclick="saveToStorage()">Save</button>
+    <button class="upload-btn" style="background:var(--panel2);border:1px solid var(--border);color:var(--muted);" onclick="loadFromStorage()">Restore</button>
+  </div>
+</nav>
+
+<!-- ===== BENCHMARKS ===== -->
+<div class="section active" id="tab-benchmarks">
+  <div class="section-header">
+    <span class="section-title">NPL Match Benchmarks</span>
+    <span class="section-sub" id="bench-subtitle">R1–R8 · 8 games · NPL Senior · hardcoded defaults</span>
+  </div>
+
+  <div class="half-selector">
+    <button class="half-btn active" onclick="showBenchmark(0,this)">Full Game</button>
+    <button class="half-btn" onclick="showBenchmark(1,this)">1st Half</button>
+    <button class="half-btn" onclick="showBenchmark(2,this)">2nd Half</button>
+  </div>
+
+  <div id="benchmark-content"></div>
+
+  <div class="divider"></div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;">
+    <!-- BIP% Season Chart -->
+    <div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <h3 class="sub-heading" style="margin-bottom:0;">Season BIP % by Game</h3>
+        <div id="season-quick-stats" style="display:flex;gap:16px;font-size:12px;color:var(--muted);"></div>
+      </div>
+      <div class="card">
+        <div style="display:flex;gap:6px;margin-bottom:12px;">
+          <button class="half-btn active" id="bip-chart-full" onclick="setSeasonChartHalf(0,this,'bip')">Full Game</button>
+          <button class="half-btn" id="bip-chart-h1" onclick="setSeasonChartHalf(1,this,'bip')">1st Half</button>
+          <button class="half-btn" id="bip-chart-h2" onclick="setSeasonChartHalf(2,this,'bip')">2nd Half</button>
+        </div>
+        <div class="season-chart-wrap">
+          <div id="season-bip-chart" style="width:100%;"></div>
+        </div>
+        <div style="margin-top:8px;font-size:10px;color:var(--muted);display:flex;gap:16px;">
+          <span style="display:flex;align-items:center;gap:5px;"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#27AE60;"></span>At/above avg</span>
+          <span style="display:flex;align-items:center;gap:5px;"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#C8A951;"></span>Within 10%</span>
+          <span style="display:flex;align-items:center;gap:5px;"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#4A5568;"></span>Below</span>
+          <span style="display:flex;align-items:center;gap:5px;"><span style="display:inline-block;width:18px;border-top:2px dashed rgba(255,255,255,0.35);"></span>NPL avg (dashed)</span>
+        </div>
+      </div>
+
+      <!-- BOP Duration Season Chart -->
+      <div style="margin-top:16px;">
+        <h3 class="sub-heading">Median BOP Duration by Game</h3>
+        <div class="card">
+          <div style="display:flex;gap:6px;margin-bottom:12px;">
+            <button class="half-btn active" id="bop-chart-full" onclick="setSeasonChartHalf(0,this,'bop')">Full Game</button>
+            <button class="half-btn" id="bop-chart-h1" onclick="setSeasonChartHalf(1,this,'bop')">1st Half</button>
+            <button class="half-btn" id="bop-chart-h2" onclick="setSeasonChartHalf(2,this,'bop')">2nd Half</button>
+          </div>
+          <div class="season-chart-wrap">
+            <div id="season-bop-chart" style="width:100%;"></div>
+          </div>
+          <div style="margin-top:8px;font-size:10px;color:var(--muted);display:flex;gap:16px;">
+            <span style="display:flex;align-items:center;gap:5px;"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#27AE60;"></span>Low BOP (fast restart)</span>
+            <span style="display:flex;align-items:center;gap:5px;"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#C8A951;"></span>Near avg</span>
+            <span style="display:flex;align-items:center;gap:5px;"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#E74C3C;"></span>High BOP</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Game List -->
+    <div>
+      <h3 class="sub-heading">Loaded Games</h3>
+      <div class="card" style="padding:0;">
+        <table class="game-table">
+          <thead><tr>
+            <th>Opponent</th><th>Date</th><th>Comp</th><th>Loc</th><th>BIP%</th><th>Med BOP</th><th>Fast Restart</th><th></th>
+          </tr></thead>
+          <tbody id="game-list-body"></tbody>
+        </table>
+        <div id="game-list-empty" class="empty-state" style="display:none;">No games loaded. Upload CSVs to begin.</div>
+      </div>
+      <div id="home-away-split" style="margin-top:12px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== DRILL AUDIT ===== -->
+<div class="section" id="tab-audit">
+  <div class="section-header">
+    <span class="section-title">Drill BIP Profile Index</span>
+    <span class="section-sub">Enter drill data to calculate match-similarity score</span>
+  </div>
+  <div style="margin-bottom:16px;padding:12px 14px;background:rgba(52,152,219,0.07);border:1px solid rgba(52,152,219,0.2);border-radius:4px;">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <div>
+        <div style="font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:#3498DB;font-weight:700;margin-bottom:4px;">Import from Training PDF</div>
+        <div style="font-size:11px;color:#777;">Reads GPS session report — extracts drill groups, BIP time and median BOP. Select a drill to auto-fill the form.</div>
+      </div>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:8px;">
+        <button onclick="document.getElementById('pdf-drill-input').click()"
+          style="padding:7px 14px;background:rgba(52,152,219,0.15);border:1px solid rgba(52,152,219,0.4);color:#3498DB;font-weight:700;font-size:12px;letter-spacing:1px;cursor:pointer;border-radius:3px;">
+          &#43; Import PDF
+        </button>
+        <input type="file" id="pdf-drill-input" accept=".pdf" style="display:none;" onchange="importDrillPDF(this)" />
+      </div>
+    </div>
+    <div id="pdf-drill-results" style="display:none;margin-top:12px;border-top:1px solid rgba(52,152,219,0.2);padding-top:12px;">
+      <div style="font-size:10px;letter-spacing:1px;text-transform:uppercase;color:#777;margin-bottom:8px;">Drills found — click to load into audit form</div>
+      <div id="pdf-drill-list" style="display:flex;flex-direction:column;gap:6px;"></div>
+    </div>
+    <div id="pdf-drill-status" style="font-size:11px;color:#777;margin-top:6px;"></div>
+  </div>
+  <div class="audit-layout">
+    <div>
+      <div class="card">
+        <div class="card-title">Drill Details</div>
+        <div class="input-group">
+          <label class="input-label">Drill Name</label>
+          <input type="text" id="drill-name" placeholder="e.g. TG – ATT v DEF" />
+        </div>
+        <div class="input-group">
+          <label class="input-label">Drill Format</label>
+          <select id="drill-format">
+            <option value="countable">BIP-Countable (all players active)</option>
+            <option value="excluded">BIP-Excluded (Wave / interval format)</option>
+          </select>
+        </div>
+        <div class="input-group">
+          <label class="input-label">Compare Against</label>
+          <select id="benchmark-half">
+            <option value="0">Full Game Benchmark</option>
+            <option value="1">1st Half Benchmark</option>
+            <option value="2">2nd Half Benchmark</option>
+          </select>
+        </div>
+        <div class="divider"></div>
+        <div class="input-group">
+          <label class="input-label">Total Drill Duration (mins)</label>
+          <input type="number" id="drill-duration" placeholder="e.g. 15" min="0" step="0.5" />
+        </div>
+        <div class="input-group">
+          <label class="input-label">Total BIP Time (mins)</label>
+          <input type="number" id="drill-bip" placeholder="e.g. 9" min="0" step="0.5" />
+        </div>
+        <div class="input-group">
+          <label class="input-label">Median BOP per Sequence (seconds)</label>
+          <input type="number" id="drill-median-bop" placeholder="e.g. 35" min="0" step="1" />
+          <div style="font-size:10px;color:var(--muted);margin-top:3px;">Exclude sequences >90s (coaching stoppages)</div>
+        </div>
+        <div class="divider"></div>
+        <div class="input-group">
+          <label class="input-label">BIP Sequence Counts per Bin</label>
+          <div class="bin-inputs">
+            <div><span class="bin-input-label">0–15s</span><input type="number" id="b0" placeholder="0" min="0" /></div>
+            <div><span class="bin-input-label">15–30s</span><input type="number" id="b1" placeholder="0" min="0" /></div>
+            <div><span class="bin-input-label">30–60s</span><input type="number" id="b2" placeholder="0" min="0" /></div>
+            <div><span class="bin-input-label">60–90s</span><input type="number" id="b3" placeholder="0" min="0" /></div>
+            <div><span class="bin-input-label">90–120s</span><input type="number" id="b4" placeholder="0" min="0" /></div>
+            <div><span class="bin-input-label">120–150s</span><input type="number" id="b5" placeholder="0" min="0" /></div>
+            <div><span class="bin-input-label">150–200s</span><input type="number" id="b6" placeholder="0" min="0" /></div>
+            <div><span class="bin-input-label">200+s</span><input type="number" id="b7" placeholder="0" min="0" /></div>
+          </div>
+        </div>
+        
+        <!-- GPS Physical Data (Optional) -->
+        <div class="divider"></div>
+        <div class="input-group">
+          <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="document.getElementById('gps-inputs-section').style.display=document.getElementById('gps-inputs-section').style.display==='none'?'block':'none'">
+            <label class="input-label" style="margin:0;">⚡ GPS Physical Data (Optional)</label>
+            <span id="gps-benchmark-status" style="font-size:10px;color:var(--muted);"></span>
+          </div>
+          <div id="gps-inputs-section" style="display:none;margin-top:12px;">
+            <div style="background:rgba(52,152,219,0.08);border:1px solid rgba(52,152,219,0.2);border-radius:4px;padding:10px;margin-bottom:12px;font-size:11px;color:#5dade2;">
+              <strong>Compare drill physical output to match GPS demands.</strong> Enter GPS data from training drill to calculate GPS Match Index (GMI).
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+              <div>
+                <label class="input-label">Total Distance (meters)</label>
+                <input type="number" id="drill-totaldist" placeholder="e.g. 2400" min="0" step="1" />
+              </div>
+              <div>
+                <label class="input-label">HSR >5.5m/s (meters)</label>
+                <input type="number" id="drill-hsr" placeholder="e.g. 245" min="0" step="1" />
+              </div>
+              <div>
+                <label class="input-label">HMLD >25.5w/kg</label>
+                <input type="number" id="drill-hmld" placeholder="e.g. 850" min="0" step="1" />
+              </div>
+              <div>
+                <label class="input-label">Max Velocity (m/s)</label>
+                <input type="number" id="drill-maxvel" placeholder="e.g. 8.5" min="0" step="0.01" />
+              </div>
+              <div>
+                <label class="input-label">Intense Accels >2.5m/s²</label>
+                <input type="number" id="drill-accels" placeholder="e.g. 28" min="0" step="1" />
+              </div>
+              <div>
+                <label class="input-label">Intense Decels >2.5m/s²</label>
+                <input type="number" id="drill-decels" placeholder="e.g. 35" min="0" step="1" />
+              </div>
+            </div>
+            <div style="margin-top:8px;">
+              <label class="input-label">Match Benchmark</label>
+              <select id="gps-benchmark-select" style="width:100%;">
+                <option value="">No GPS benchmark loaded</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        
+        <button class="calc-btn" onclick="calculateScore()">CALCULATE DRILL PROFILE</button>
+      </div>
+    </div>
+    <div id="audit-results">
+      <div class="placeholder">
+        <div style="font-size:36px;opacity:0.2;margin-bottom:10px;">⬤</div>
+        <div>Enter drill data and click Calculate to see the BIP Profile Index</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SESSION AUDIT ===== -->
+<div class="section" id="tab-session">
+  <div class="section-header">
+    <span class="section-title">Session Audit</span>
+    <span class="section-sub">Weekly drill log and session-level BIP summary</span>
+  </div>
+  <div style="display:grid;grid-template-columns:160px 150px 130px 1fr auto;gap:10px;align-items:center;margin-bottom:16px;">
+    <input type="text" id="session-label" placeholder="e.g. Tuesday MD-4" />
+    <input type="date" id="session-date" style="background:var(--panel2);border:1px solid var(--border);color:var(--text);padding:8px 11px;font-family:'Barlow',sans-serif;font-size:13px;border-radius:3px;outline:none;" />
+    <select id="session-md" style="background:var(--panel2);border:1px solid var(--border);color:var(--text);padding:8px 11px;font-family:'Barlow',sans-serif;font-size:13px;border-radius:3px;outline:none;">
+      <option value="">Select MD —</option>
+      <option value="MD+1">MD+1</option><option value="MD+2">MD+2</option><option value="MD+3">MD+3</option>
+      <option value="MD+4">MD+4</option><option value="MD-3">MD-3</option><option value="MD-2">MD-2</option><option value="MD-1">MD-1</option>
+    </select>
+    <div style="font-size:11px;color:var(--muted);">Score drills in Drill Audit then save to calendar.</div>
+    <button onclick="saveSessionToCalendar()" style="padding:8px 16px;background:var(--red);border:none;color:white;font-weight:700;font-size:13px;letter-spacing:1.5px;cursor:pointer;border-radius:3px;white-space:nowrap;">SAVE TO CALENDAR</button>
+  </div>
+  <div class="info-note" style="display:flex;justify-content:space-between;align-items:center;"><span>Wave Games and BIP-Excluded drills are tracked separately and excluded from density calculations. Build your session here, then use <strong>Save to Calendar</strong> to log it.</span><button onclick="exportSessionCSV()" style="margin-left:16px;padding:6px 12px;background:var(--panel2);border:1px solid var(--border);color:#777;font-size:11px;font-weight:700;cursor:pointer;border-radius:3px;white-space:nowrap;letter-spacing:1px;flex-shrink:0;">&#8595; CSV</button></div>
+  <div class="drill-row header">
+    <div>Drill</div><div>Duration</div><div>BIP Time</div><div>BIP%</div><div>Med BOP</div><div>BPI</div><div>Type</div><div></div>
+  </div>
+  <div id="session-drills-list"></div>
+  <div class="add-drill-row" onclick="showTab('audit')">+ Score a drill in the Audit Tool</div>
+  <div id="session-summary-area"></div>
+</div>
+
+<!-- ===== GPS REPORT READER ===== -->
+<div class="section" id="tab-gpsreader">
+  <div class="section-header">
+    <span class="section-title">GPS Report Reader</span>
+    <span class="section-sub">Upload a GPS game report PDF — extracts key match stats</span>
+  </div>
+
+ <div>
+    <!-- Drop zone -->
+    <div class="gps-reader-zone" id="gps-drop-zone"
+      onclick="document.getElementById('gps-pdf-input').click()"
+      ondragover="event.preventDefault();this.classList.add('drag-over')"
+      ondragleave="this.classList.remove('drag-over')"
+      ondrop="handleGPSDrop(event)">
+      <div style="font-size:40px;opacity:0.3;margin-bottom:12px;">📄</div>
+      <div style="font-weight:700;font-size:16px;margin-bottom:6px;">Upload GPS Game Report</div>
+      <div style="font-size:12px;color:var(--muted);">Click or drag & drop a PDF file here</div>
+      <div style="font-size:11px;color:#555;margin-top:8px;">Supports Catapult, Statsports, Polar, GPSports format</div>
+    </div>
+    <input type="file" id="gps-pdf-input" accept=".pdf" style="display:none;" onchange="handleGPSUpload(this)" />
+
+    <div id="gps-status" style="font-size:12px;color:var(--muted);margin-top:10px;text-align:center;"></div>
+
+    <!-- Extracted stats grid -->
+    <div id="gps-stats-panel" style="display:none;margin-top:16px;">
+      <h3 class="sub-heading">Extracted Match Stats</h3>
+      <div class="gps-stat-grid" id="gps-stat-grid"></div>
+
+      <div style="margin-top:12px;">
+        <h3 class="sub-heading">Player Load Summary</h3>
+        <div id="gps-player-table"></div>
+      </div>
+      
+      <div style="margin-top:20px;">
+        <h3 class="sub-heading">GPS Match Benchmarks History</h3>
+        <div id="gps-benchmark-history" style="font-size:12px;color:#777;font-style:italic;">No benchmarks saved yet</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== WEEK AUDIT CALENDAR ===== -->
+<div class="section" id="tab-calendar">
+  <div class="section-header">
+    <span class="section-title">Week Audit</span>
+    <span class="section-sub">Log training sessions to track weekly BIP prescription</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+    <button onclick="prevWeek()" style="padding:7px 14px;background:var(--panel2);border:1px solid var(--border);color:var(--muted);font-weight:700;font-size:13px;cursor:pointer;border-radius:3px;">&#8592;</button>
+    <span id="cal-week-label" style="font-weight:700;font-size:16px;color:var(--text);min-width:180px;text-align:center;"></span>
+    <button onclick="nextWeek()" style="padding:7px 14px;background:var(--panel2);border:1px solid var(--border);color:var(--muted);font-weight:700;font-size:13px;cursor:pointer;border-radius:3px;">&#8594;</button>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:10px;">
+      <span style="font-size:12px;color:var(--muted);">Sessions saved from Session Audit tab</span>
+      <button onclick="exportWeekCSV()" style="padding:6px 12px;background:var(--panel2);border:1px solid var(--border);color:#777;font-size:11px;font-weight:700;cursor:pointer;border-radius:3px;letter-spacing:1px;">&#8595; CSV</button>
+    </div>
+  </div>
+  <div id="cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-bottom:20px;"></div>
+  <h3 class="sub-heading">Week Summary</h3>
+  <div id="week-summary"></div>
+  <div class="divider"></div>
+  <div class="info-note">Build your session in the <strong>Session Audit</strong> tab, then click <strong>Save to Calendar</strong> with a date selected to log it here.</div>
+</div>
+
+<!-- ===== DRILL LIBRARY ===== -->
+<div class="section" id="tab-library">
+  <div class="section-header">
+    <span class="section-title">Drill Library</span>
+    <span class="section-sub">Saved drills with historical BPI scores — load any drill back into the audit</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+    <input id="library-search" type="text" placeholder="Search drill name..." oninput="filterLibrary()"
+      style="background:var(--panel2);border:1px solid var(--border);color:var(--text);padding:8px 12px;font-size:13px;border-radius:3px;outline:none;width:220px;" />
+    <select id="library-type-filter" onchange="filterLibrary()"
+      style="background:var(--panel2);border:1px solid var(--border);color:var(--text);padding:8px 12px;font-size:13px;border-radius:3px;outline:none;">
+      <option value="">All types</option>
+      <option value="TYPE B">Type B — Match-Approximate</option>
+      <option value="TYPE A">Type A — Intensity Overload</option>
+      <option value="TYPE C">Type C — Volume/Structure</option>
+    </select>
+    <span id="library-count" style="font-size:12px;color:var(--muted);margin-left:4px;"></span>
+    <div style="margin-left:auto;display:flex;gap:8px;">
+      <button onclick="exportLibraryCSV()" style="padding:7px 14px;background:var(--panel2);border:1px solid var(--border);color:#777;font-size:11px;font-weight:700;cursor:pointer;border-radius:3px;letter-spacing:1px;">&#8595; Export CSV</button>
+      <button onclick="if(confirm('Clear entire drill library?')){drillLibrary=[];saveLibrary();renderDrillLibrary();}" style="padding:7px 14px;background:var(--panel2);border:1px solid var(--border);color:#555;font-size:11px;cursor:pointer;border-radius:3px;">Clear All</button>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 60px 60px 60px 60px 80px 90px auto;gap:0;padding:8px 12px;border-bottom:1px solid #2A2A2A;margin-bottom:2px;">
+    <div style="font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#555;">Drill Name</div>
+    <div style="font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#555;text-align:center;">Dur</div>
+    <div style="font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#555;text-align:center;">BIP%</div>
+    <div style="font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#555;text-align:center;">BOP</div>
+    <div style="font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#555;text-align:center;">BPI</div>
+    <div style="font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#555;text-align:center;">Type</div>
+    <div></div><div></div>
+  </div>
+  <div id="drill-library-list"></div>
+  <div class="divider"></div>
+  <div class="info-note">Score a drill in the <strong>Drill Audit</strong> tab, then click <strong>Save to Library</strong>.</div>
+</div>
+
+<!-- ===== COACH REFERENCE ===== -->
+<div class="section" id="tab-reference">
+  <div class="section-header">
+    <span class="section-title">Coach Reference Guide</span>
+    <span class="section-sub">BIP-informed training prescription framework</span>
+  </div>
+  <div class="card" style="margin-bottom:20px;">
+    <div class="card-title">Core Principle</div>
+    <p style="font-size:13px;line-height:1.8;color:#CCC;">Match play is characterised by <strong>high-frequency, short-burst, fast-restart</strong> sequences. The BIP Profile Index (BPI) measures how closely a training drill replicates the structural profile of competitive NPL match play across three dimensions: sequence length distribution, restart pressure, and session density. A score of 100 = structurally identical to match.</p>
+  </div>
+  <h3 class="sub-heading">BPI Score Zones</h3>
+  <div class="card" style="margin-bottom:20px;">
+    <table class="score-zone-table">
+      <thead><tr><th>Score</th><th>Zone</th><th>Interpretation</th><th>Typical Context</th></tr></thead>
+      <tbody>
+        <tr><td><strong style="color:#2ECC71;">75–100</strong></td><td><span class="zone-dot" style="background:#2ECC71;"></span>Match-Approximate</td><td>Structurally close to match across all three dimensions</td><td>11v11, BPO drill (fast restart), near-full sided MD-1/MD-2</td></tr>
+        <tr><td><strong style="color:#F39C12;">50–74</strong></td><td><span class="zone-dot" style="background:#F39C12;"></span>Match-Adjacent</td><td>Similar in some dimensions, deviating in others</td><td>ATT v DEF (sustained BIP), 7v7 possession, structured SSG</td></tr>
+        <tr><td><strong style="color:#E67E22;">30–49</strong></td><td><span class="zone-dot" style="background:#E67E22;"></span>Tactical/Structural</td><td>Significant deviation. Tactically valuable but physiologically dissimilar</td><td>Possession circuits, shape work, SSGs with coaching interruption</td></tr>
+        <tr><td><strong style="color:#3498DB;">0–29</strong></td><td><span class="zone-dot" style="background:#3498DB;"></span>Intensity Isolated</td><td>High intensity per sequence, very different structural profile</td><td>Wave games, 1v1s, finishing, set piece</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <h3 class="sub-heading">Drill Archetypes</h3>
+  <div class="ref-grid-3">
+    <div class="archetype-card type-a">
+      <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px;"><span class="archetype-badge">TYPE A</span><span class="archetype-name">Intensity Overload</span></div>
+      <div class="archetype-desc">High output per sequence, long BOP. Trains neuromuscular quality, speed, individual actions.</div>
+      <div class="archetype-examples">Wave Games, 1v1s, finishing circuits, unopposed speed work</div>
+    </div>
+    <div class="archetype-card type-b">
+      <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px;"><span class="archetype-badge">TYPE B</span><span class="archetype-name">Match-Approximate</span></div>
+      <div class="archetype-desc">Both intensity and restart pressure near match demands. Most achievable in large-sided formats with deliberate ball management.</div>
+      <div class="archetype-examples">BPO drill (fast restart), 11v11 full pitch, ATT v DEF at MD-1/MD-2</div>
+    </div>
+    <div class="archetype-card type-c">
+      <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px;"><span class="archetype-badge">TYPE C</span><span class="archetype-name">Volume / Structure</span></div>
+      <div class="archetype-desc">Moderate output, long BOP, often with coaching interruptions. Tactically necessary.</div>
+      <div class="archetype-examples">Possession games, 4v4+4, shape/unit work, 7v6 tactical</div>
+    </div>
+  </div>
+
+  <h3 class="sub-heading">BIP-Informed Programming Principles</h3>
+  <div class="ref-grid">
+    <div class="card">
+      <div class="card-title">Distribution Matters</div>
+      <p style="font-size:13px;line-height:1.7;color:#CCC;">Match BIP clusters in 15–60s bins. Drills with sustained 90s+ sequences score low on distribution similarity even if total BIP time is high. Break up long possessions to lift BPI.</p>
+    </div>
+    <div class="card">
+      <div class="card-title">Restart Pressure Is Key</div>
+      <p style="font-size:13px;line-height:1.7;color:#CCC;">NPL median BOP ≈ 22s. Drills with median BOP >45s will score low regardless of intensity. Fast restart (≤15s BOP) directly lifts BPI. Use ball placement and transition design.</p>
+    </div>
+    <div class="card">
+      <div class="card-title">Intensity ≠ Specificity</div>
+      <p style="font-size:13px;line-height:1.7;color:#CCC;">Type A drills (wave games, 1v1s) deliver high output but score low BPI due to long rest. Use strategically for neuromuscular stimulus, not match replication.</p>
+    </div>
+    <div class="card">
+      <div class="card-title">Context Over Score</div>
+      <p style="font-size:13px;line-height:1.7;color:#CCC;">A low BPI doesn't mean bad training. Tactical work (Type C) is essential. Use BPI to ensure adequate match-approximate load (Type B) across the week, not to eliminate all other formats.</p>
+    </div>
+  </div>
+</div>
+
+<!-- PDF EXPORT MODAL -->
+<div class="modal-overlay" id="pdf-modal">
+  <div class="modal">
+    <div class="modal-title">Export PDF Report</div>
+    <div class="modal-sub">Select sections to include</div>
+    <div style="display:flex;flex-direction:column;gap:10px;margin:16px 0;">
+      <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;"><input type="checkbox" id="pdf-benchmarks" checked style="width:16px;height:16px;accent-color:var(--red);" />Match Benchmarks Summary</label>
+      <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;"><input type="checkbox" id="pdf-season" checked style="width:16px;height:16px;accent-color:var(--red);" />Season BIP% Per Game</label>
+      <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;"><input type="checkbox" id="pdf-gamelist" checked style="width:16px;height:16px;accent-color:var(--red);" />Game Log Table</label>
+      <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;"><input type="checkbox" id="pdf-session" style="width:16px;height:16px;accent-color:var(--red);" />Current Session Audit</label>
+      <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;"><input type="checkbox" id="pdf-week" style="width:16px;height:16px;accent-color:var(--red);" />Week Audit Summary</label>
+    </div>
+    <div class="modal-actions">
+      <button class="modal-cancel" onclick="document.getElementById('pdf-modal').classList.remove('open')">Cancel</button>
+      <button class="modal-confirm" onclick="exportPDF()">GENERATE PDF</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ========== CONSTANTS ==========
+const BINS = ["0-15s","15-30s","30-60s","60-90s","90-120s","120-150s","150-200s","200+s"];
+const BIN_RANGES = [[0,15],[15,30],[30,60],[60,90],[90,120],[120,150],[150,200],[200,99999]];
+const FLAG_THRESHOLD = 360;
+
+// ========== STATE ==========
+let games = [];
+let weekSessions = {};
+let sessionDrills = [];
+let pendingDrill = null;
+let currentBenchmarkHalf = 0;
+let nameDisplayMode = 'logo';
+let calendarRefDate = new Date().toISOString().slice(0,10);
+let drillLibrary = [];
+let onModalConfirm = null;
+let pendingParseResult = null;
+
+// Season chart half state
+let bipChartHalf = 0;
+let bopChartHalf = 0;
+
+// GPS match benchmarks
+let matchGPSBenchmarks = {
+  latest: null,
+  history: []
+};
+
+// Training GPS drills (from session PDFs)
+let trainingDrills = [];
+
+// GPS reader state (AI analysis removed)
+
+// ========== STORAGE (uses window.storage API, falls back gracefully) ==========
+const STORAGE_KEY   = 'wsw_bip_calendar_v2';
+const GAMES_KEY     = 'wsw_bip_games_v2';
+const LIBRARY_KEY   = 'wsw_bip_library_v1';
+const GPS_BENCHMARKS_KEY = 'wsw_gps_benchmarks_v1';
+const TRAINING_DRILLS_KEY = 'wsw_training_drills_v1';
+// GPS_CHATS_KEY removed
+
+// Storage wrapper with localStorage fallback
+const storage = {
+  async get(key, shared = false) {
+    try {
+      if (window.storage && typeof window.storage.get === 'function') {
+        return await window.storage.get(key, shared);
+      }
+    } catch (e) {
+      console.warn('window.storage.get failed, using localStorage:', e);
+    }
+    // Fallback to localStorage
+    const val = localStorage.getItem(key);
+    return val ? { key, value: val, shared } : null;
+  },
+  
+  async set(key, value, shared = false) {
+    try {
+      if (window.storage && typeof window.storage.set === 'function') {
+        return await window.storage.set(key, value, shared);
+      }
+    } catch (e) {
+      console.warn('window.storage.set failed, using localStorage:', e);
+    }
+    // Fallback to localStorage
+    localStorage.setItem(key, value);
+    return { key, value, shared };
+  },
+  
+  async delete(key, shared = false) {
+    try {
+      if (window.storage && typeof window.storage.delete === 'function') {
+        return await window.storage.delete(key, shared);
+      }
+    } catch (e) {
+      console.warn('window.storage.delete failed, using localStorage:', e);
+    }
+    // Fallback to localStorage
+    localStorage.removeItem(key);
+    return { key, deleted: true, shared };
+  },
+  
+  async list(prefix = '', shared = false) {
+    try {
+      if (window.storage && typeof window.storage.list === 'function') {
+        return await window.storage.list(prefix, shared);
+      }
+    } catch (e) {
+      console.warn('window.storage.list failed, using localStorage:', e);
+    }
+    // Fallback to localStorage
+    const keys = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(prefix)) {
+        keys.push(key);
+      }
+    }
+    return { keys, prefix, shared };
+  }
+};
+
+async function saveToStorage() {
+  try {
+    // Calendar sessions
+    await storage.set(STORAGE_KEY, JSON.stringify(weekSessions));
+    // Uploaded game metadata only (no logos, keep small)
+    var gameMeta = games.filter(g => g._uploaded).map(g => ({
+      opponent:g.opponent, date:g.date, comp:g.comp, location:g.location,
+      fg:g.fg, h1:g.h1, h2:g.h2, _uploaded:true
+    }));
+    await storage.set(GAMES_KEY, JSON.stringify(gameMeta));
+    // Drill library
+    await storage.set(LIBRARY_KEY, JSON.stringify(drillLibrary));
+    // GPS benchmarks
+    await storage.set(GPS_BENCHMARKS_KEY, JSON.stringify(matchGPSBenchmarks));
+    // Training drills
+    await storage.set(TRAINING_DRILLS_KEY, JSON.stringify(trainingDrills));
+    showToast('Saved ✓');
+  } catch(e) {
+    showToast('Save failed — ' + e.message, true);
+  }
+}
+
+async function loadFromStorage() {
+  try {
+    var calRes = await storage.get(STORAGE_KEY);
+    if (calRes && calRes.value) {
+      weekSessions = JSON.parse(calRes.value);
+      renderCalendar(); renderWeekSummary();
+    }
+  } catch(e) {}
+
+  try {
+    var gmRes = await storage.get(GAMES_KEY);
+    if (gmRes && gmRes.value) {
+      var uploaded = JSON.parse(gmRes.value);
+      uploaded.forEach(g => {
+        if (!games.some(x => x.opponent===g.opponent && x.date===g.date && x.comp===g.comp))
+          games.push(g);
+      });
+      updateAll();
+    }
+  } catch(e) {}
+
+  try {
+    var libRes = await storage.get(LIBRARY_KEY);
+    if (libRes && libRes.value) {
+      drillLibrary = JSON.parse(libRes.value);
+      renderDrillLibrary();
+    }
+  } catch(e) {}
+
+  try {
+    var gpsRes = await storage.get(GPS_BENCHMARKS_KEY);
+    if (gpsRes && gpsRes.value) {
+      const restored = JSON.parse(gpsRes.value);
+      if (restored && restored.history && Array.isArray(restored.history)) {
+        matchGPSBenchmarks = restored;
+        updateGPSBenchmarkDropdown();
+      }
+    }
+  } catch(e) {}
+
+  try {
+    var drillsRes = await storage.get(TRAINING_DRILLS_KEY);
+    if (drillsRes && drillsRes.value) {
+      const restored = JSON.parse(drillsRes.value);
+      if (restored && Array.isArray(restored)) {
+        trainingDrills = restored;
+      }
+    }
+  } catch(e) {}
+
+  showToast('Data restored ✓');
+}
+
+function saveLibrary() {
+  storage.set(LIBRARY_KEY, JSON.stringify(drillLibrary)).catch(() => {});
+}
+
+function showToast(msg, isErr) {
+  var t = document.getElementById('toast');
+  if (!t) {
+    t = document.createElement('div'); t.id='toast'; document.body.appendChild(t);
+    t.style.cssText='position:fixed;bottom:24px;right:24px;padding:10px 18px;border-radius:4px;font-size:13px;font-weight:600;z-index:9999;transition:opacity 0.4s;opacity:0;pointer-events:none;';
+  }
+  t.textContent = msg;
+  t.style.background = isErr ? '#8B0000' : '#27AE60';
+  t.style.color = '#fff';
+  t.style.opacity = '1';
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => { t.style.opacity='0'; }, 2200);
+}
+
+// ========== GOOGLE SHEETS INTEGRATION ==========
+const SHEETS_CONFIG = {
+  // Replace with your actual Google Sheet ID after setup
+  sheetId: 'YOUR_SHEET_ID_HERE',
+  // Sheet name/range (default: first sheet, all data)
+  range: 'Sheet1',
+  
+  // Store sheet ID in localStorage for easy updating
+  getSheetId: () => localStorage.getItem('gsheet_id') || SHEETS_CONFIG.sheetId,
+  setSheetId: (id) => localStorage.setItem('gsheet_id', id)
+};
+
+async function fetchFromBigQuery() {
+  const sheetId = SHEETS_CONFIG.getSheetId();
+  
+  if (!sheetId || sheetId === 'YOUR_SHEET_ID_HERE') {
+    showSheetsSetupModal();
+    return;
+  }
+  
+  showToast('Fetching from Google Sheets...');
+  
+  try {
+    // Fetch CSV export from public Google Sheet
+    const url = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv`;
+    
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch Google Sheet. Make sure it\'s public (view-only).');
+    }
+    
+    const csvText = await response.text();
+    
+    // Parse CSV and populate games
+    parseSheetsCSV(csvText);
+    
+    const gameCount = games.filter(g => g._uploaded).length;
+    showToast(`✓ Loaded ${gameCount} games from Google Sheets`);
+    
+  } catch (error) {
+    console.error('Google Sheets fetch error:', error);
+    showToast('Fetch failed: ' + error.message, true);
+  }
+}
+
+function parseSheetsCSV(csvText) {
+  const lines = csvText.trim().split('\n');
+  if (lines.length < 2) {
+    showToast('No data found in Google Sheet', true);
+    return;
+  }
+  
+  // Parse header row
+  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+  
+  // Create field index map
+  const fieldMap = {};
+  headers.forEach((h, i) => {
+    fieldMap[h.toLowerCase()] = i;
+  });
+  
+  // Clear existing uploaded games
+  games = games.filter(g => !g._uploaded);
+  
+  // Parse data rows
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line.trim()) continue;
+    
+    // Simple CSV parse (handles quoted values)
+    const values = [];
+    let current = '';
+    let inQuotes = false;
+    
+    for (let j = 0; j < line.length; j++) {
+      const char = line[j];
+      if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === ',' && !inQuotes) {
+        values.push(current.trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    values.push(current.trim());
+    
+    // Extract values using field map
+    const getVal = (field) => {
+      const idx = fieldMap[field.toLowerCase()];
+      return idx !== undefined ? values[idx] : '';
+    };
+    
+    const opponent = getVal('opponent');
+    if (!opponent) continue; // Skip empty rows
+    
+    // Build bins array
+    const binCounts = [
+      parseInt(getVal('bin_0_15s')) || 0,
+      parseInt(getVal('bin_15_30s')) || 0,
+      parseInt(getVal('bin_30_60s')) || 0,
+      parseInt(getVal('bin_60_90s')) || 0,
+      parseInt(getVal('bin_90_120s')) || 0,
+      parseInt(getVal('bin_120_150s')) || 0,
+      parseInt(getVal('bin_150_200s')) || 0,
+      parseInt(getVal('bin_200plus')) || 0
+    ];
+    
+    const game = {
+      opponent: opponent,
+      date: getVal('date'),
+      comp: getVal('comp') || 'NPL',
+      location: getVal('location') === 'H' ? 'H' : 'A',
+      _uploaded: true,
+      _source: 'Google Sheets',
+      fg: {
+        bins: binCounts,
+        avgBIP: parseFloat(getVal('fg_bip_time')) || 0,
+        avgBOP: parseFloat(getVal('fg_bop_time')) || 0,
+        bipPct: parseFloat(getVal('fg_bip_pct')) || 0,
+        medBOP: parseInt(getVal('fg_median_bop')) || 0
+      },
+      h1: {
+        bins: binCounts,
+        avgBIP: parseFloat(getVal('h1_bip_time')) || 0,
+        avgBOP: parseFloat(getVal('h1_bop_time')) || 0,
+        bipPct: parseFloat(getVal('h1_bip_pct')) || 0,
+        medBOP: parseInt(getVal('h1_median_bop')) || 0
+      },
+      h2: {
+        bins: binCounts,
+        avgBIP: parseFloat(getVal('h2_bip_time')) || 0,
+        avgBOP: parseFloat(getVal('h2_bop_time')) || 0,
+        bipPct: parseFloat(getVal('h2_bip_pct')) || 0,
+        medBOP: parseInt(getVal('h2_median_bop')) || 0
+      }
+    };
+    
+    // Add club logo if available
+    const logo = CLUB_LOGOS[game.opponent];
+    if (logo) game.logo = logo;
+    
+    games.push(game);
+  }
+  
+  // Update UI
+  updateAll();
+  
+  // Auto-save
+  saveToStorage().catch(() => {});
+}
+
+function showSheetsSetupModal() {
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;z-index:10000;';
+  
+  const currentSheetId = SHEETS_CONFIG.getSheetId();
+  
+  modal.innerHTML = `
+    <div style="background:var(--dark);border:2px solid var(--red);border-radius:6px;padding:24px;max-width:600px;width:90%;">
+      <h2 style="font-size:18px;font-weight:700;margin-bottom:12px;color:var(--red);">Google Sheets Setup</h2>
+      <p style="font-size:13px;color:#AAA;margin-bottom:16px;">Connect to your BigQuery → Google Sheets export.</p>
+      
+      <div style="margin-bottom:16px;">
+        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:6px;">Google Sheet ID</label>
+        <input type="text" id="gsheet-id-input" value="${currentSheetId !== 'YOUR_SHEET_ID_HERE' ? currentSheetId : ''}" 
+          placeholder="1AbC_dEfGhIjKlMnOpQrStUvWxYz..."
+          onkeypress="if(event.key==='Enter')saveSheetsId()"
+          style="width:100%;padding:8px;background:var(--panel2);border:1px solid var(--border);color:var(--text);font-size:12px;border-radius:3px;font-family:monospace;" />
+      </div>
+      
+      <div style="background:rgba(52,152,219,0.1);border:1px solid rgba(52,152,219,0.3);border-radius:4px;padding:12px;margin-bottom:16px;">
+        <div style="font-size:11px;color:#5DADE2;line-height:1.6;">
+          <strong>Setup Steps:</strong><br/>
+          1. <strong>BigQuery</strong> → Schedule query to export to Google Sheets (daily)<br/>
+          2. <strong>Google Sheet</strong> → Click Share → "Anyone with link" → Viewer<br/>
+          3. <strong>Copy Sheet ID</strong> from URL: docs.google.com/spreadsheets/d/<span style="background:rgba(255,255,255,0.1);padding:2px;">SHEET_ID</span>/edit<br/>
+          4. <strong>Paste ID above</strong> → Click Save<br/>
+          <br/>
+          <em style="color:#777;">No authentication needed! Sheet must be public (view-only).</em>
+        </div>
+      </div>
+      
+      <div style="display:flex;gap:10px;justify-content:flex-end;">
+        <button onclick="this.closest('div[style*=fixed]').remove()" 
+          style="padding:8px 16px;background:var(--panel2);border:1px solid var(--border);color:var(--muted);font-weight:600;cursor:pointer;border-radius:3px;">
+          Cancel
+        </button>
+        <button onclick="saveSheetsId()" 
+          style="padding:8px 16px;background:var(--red);border:none;color:white;font-weight:700;cursor:pointer;border-radius:3px;">
+          Save & Fetch
+        </button>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  document.getElementById('gsheet-id-input').focus();
+}
+
+function saveSheetsId() {
+  const sheetId = document.getElementById('gsheet-id-input').value.trim();
+  
+  if (!sheetId) {
+    showToast('Please enter a Google Sheet ID', true);
+    return;
+  }
+  
+  // Validate format (should be alphanumeric with underscores/hyphens)
+  if (!/^[a-zA-Z0-9_-]+$/.test(sheetId)) {
+    showToast('Invalid Sheet ID format', true);
+    return;
+  }
+  
+  SHEETS_CONFIG.setSheetId(sheetId);
+  
+  // Close modal
+  document.querySelector('div[style*="position:fixed"]').remove();
+  
+  // Fetch data
+  fetchFromBigQuery();
+}
+
+// ========== DEFAULT HARDCODED DATA (R1–R8 NPL) ==========
+const DEFAULT_GAMES = [
+  { opponent:"Rockdale Ilinden FC", date:"08/02/2026", comp:"NPL", location:"HOME",
+    fg:{bip:[{b:"0-15s",c:39,s:317},{b:"15-30s",c:26,s:578},{b:"30-60s",c:24,s:1061},{b:"60-90s",c:10,s:703},{b:"90-120s",c:5,s:489},{b:"120-150s",c:2,s:241},{b:"150-200s",c:0,s:0},{b:"200+s",c:1,s:209}],bop:[{b:"0-15s",c:58,s:464},{b:"15-30s",c:25,s:494},{b:"30-60s",c:18,s:744},{b:"60-90s",c:4,s:293},{b:"90-120s",c:0,s:0},{b:"120-150s",c:1,s:125},{b:"150-200s",c:0,s:0},{b:"200+s",c:0,s:0}]},
+    h1:{bip:[{b:"0-15s",c:24,s:193},{b:"15-30s",c:15,s:333},{b:"30-60s",c:10,s:410},{b:"60-90s",c:5,s:348},{b:"90-120s",c:2,s:189},{b:"120-150s",c:1,s:120},{b:"150-200s",c:0,s:0},{b:"200+s",c:1,s:209}],bop:[{b:"0-15s",c:36,s:287},{b:"15-30s",c:13,s:272},{b:"30-60s",c:6,s:216},{b:"60-90s",c:2,s:131},{b:"90-120s",c:0,s:0},{b:"120-150s",c:1,s:125},{b:"150-200s",c:0,s:0},{b:"200+s",c:0,s:0}]},
+    h2:{bip:[{b:"0-15s",c:15,s:124},{b:"15-30s",c:11,s:244},{b:"30-60s",c:14,s:650},{b:"60-90s",c:5,s:355},{b:"90-120s",c:3,s:299},{b:"120-150s",c:1,s:120},{b:"150-200s",c:0,s:0},{b:"200+s",c:0,s:0}],bop:[{b:"0-15s",c:22,s:177},{b:"15-30s",c:12,s:222},{b:"30-60s",c:12,s:528},{b:"60-90s",c:2,s:162},{b:"90-120s",c:0,s:0},{b:"120-150s",c:0,s:0},{b:"150-200s",c:0,s:0},{b:"200+s",c:0,s:0}]}},
+  { opponent:"Sydney FC", date:"14/02/2026", comp:"NPL", location:"HOME",
+    fg:{bip:[{b:"0-15s",c:32,s:255},{b:"15-30s",c:16,s:340},{b:"30-60s",c:25,s:1055},{b:"60-90s",c:8,s:580},{b:"90-120s",c:3,s:290},{b:"120-150s",c:3,s:406},{b:"150-200s",c:2,s:355},{b:"200+s",c:1,s:304}],bop:[{b:"0-15s",c:41,s:307},{b:"15-30s",c:23,s:506},{b:"30-60s",c:16,s:651},{b:"60-90s",c:6,s:391},{b:"90-120s",c:2,s:208},{b:"120-150s",c:1,s:120},{b:"150-200s",c:0,s:0},{b:"200+s",c:0,s:0}]},
+    h1:{bip:[{b:"0-15s",c:18,s:136},{b:"15-30s",c:7,s:155},{b:"30-60s",c:15,s:634},{b:"60-90s",c:5,s:363},{b:"90-120s",c:2,s:186},{b:"120-150s",c:2,s:275},{b:"150-200s",c:0,s:0},{b:"200+s",c:0,s:0}],bop:[{b:"0-15s",c:23,s:172},{b:"15-30s",c:14,s:295},{b:"30-60s",c:6,s:216},{b:"60-90s",c:4,s:265},{b:"90-120s",c:0,s:0},{b:"120-150s",c:1,s:120},{b:"150-200s",c:0,s:0},{b:"200+s",c:0,s:0}]},
+    h2:{bip:[{b:"0-15s",c:14,s:119},{b:"15-30s",c:9,s:185},{b:"30-60s",c:10,s:421},{b:"60-90s",c:3,s:217},{b:"90-120s",c:1,s:103},{b:"120-150s",c:1,s:131},{b:"150-200s",c:2,s:355},{b:"200+s",c:1,s:304}],bop:[{b:"0-15s",c:18,s:135},{b:"15-30s",c:9,s:211},{b:"30-60s",c:10,s:435},{b:"60-90s",c:2,s:126},{b:"90-120s",c:2,s:208},{b:"120-150s",c:0,s:0},{b:"150-200s",c:0,s:0},{b:"200+s",c:0,s:0}]}},
+  { opponent:"Sydney United 58 FC", date:"22/02/2026", comp:"NPL", location:"AWAY",
+    fg:{bip:[{b:"0-15s",c:49,s:356},{b:"15-30s",c:40,s:874},{b:"30-60s",c:24,s:955},{b:"60-90s",c:7,s:499},{b:"90-120s",c:2,s:194},{b:"120-150s",c:1,s:134},{b:"150-200s",c:2,s:342},{b:"200+s",c:0,s:0}],bop:[{b:"0-15s",c:57,s:448},{b:"15-30s",c:41,s:943},{b:"30-60s",c:24,s:933},{b:"60-90s",c:2,s:157},{b:"90-120s",c:0,s:0},{b:"120-150s",c:0,s:0},{b:"150-200s",c:0,s:0},{b:"200+s",c:0,s:0}]},
+    h1:{bip:[{b:"0-15s",c:19,s:123},{b:"15-30s",c:19,s:408},{b:"30-60s",c:14,s:543},{b:"60-90s",c:4,s:285},{b:"90-120s",c:1,s:94},{b:"120-150s",c:1,s:134},{b:"150-200s",c:1,s:173},{b:"200+s",c:0,s:0}],bop:[{b:"0-15s",c:27,s:212},{b:"15-30s",c:21,s:479},{b:"30-60s",c:10,s:381},{b:"60-90s",c:0,s:0},{b:"90-120s",c:0,s:0},{b:"120-150s",c:0,s:0},{b:"150-200s",c:0,s:0},{b:"200+s",c:0,s:0}]},
+    h2:{bip:[{b:"0-15s",c:30,s:233},{b:"15-30s",c:21,s:466},{b:"30-60s",c:10,s:412},{b:"60-90s",c:3,s:214},{b:"90-120s",c:1,s:100},{b:"120-150s",c:0,s:0},{b:"150-200s",c:1,s:169},{b:"200+s",c:0,s:0}],bop:[{b:"0-15s",c:30,s:236},{b:"15-30s",c:20,s:464},{b:"30-60s",c:14,s:552},{b:"60-90s",c:2,s:157},{b:"90-120s",c:0,s:0},{b:"120-150s",c:0,s:0},{b:"150-200s",c:0,s:0},{b:"200+s",c:0,s:0}]}},
+  { opponent:"St George City FA", date:"28/02/2026", comp:"NPL", location:"AWAY",
+    fg:{bip:[{b:"0-15s",c:45,s:345},{b:"15-30s",c:31,s:652},{b:"30-60s",c:29,s:1287},{b:"60-90s",c:7,s:507},{b:"90-120s",c:5,s:506},{b:"120-150s",c:3,s:400},{b:"150-200s",c:0,s:0},{b:"200+s",c:0,s:0}],bop:[{b:"0-15s",c:72,s:589},{b:"15-30s",c:27,s:565},{b:"30-60s",c:16,s:603},{b:"60-90s",c:2,s:151},{b:"90-120s",c:1,s:115},{b:"120-150s",c:1,s:124},{b:"150-200s",c:0,s:0},{b:"200+s",c:0,s:0}]},
+    h1:{bip:[{b:"0-15s",c:25,s:193},{b:"15-30s",c:17,s:368},{b:"30-60s",c:11,s:529},{b:"60-90s",c:4,s:281},{b:"90-120s",c:4,s:397},{b:"120-150s",c:0,s:0},{b:"150-200s",c:0,s:0},{b:"200+s",c:0,s:0}],bop:[{b:"0-15s",c:37,s:317},{b:"15-30s",c:16,s:313},{b:"30-60s",c:4,s:157},{b:"60-90s",c:1,s:82},{b:"90-120s",c:1,s:115},{b:"120-150s",c:1,s:124},{b:"150-200s",c:0,s:0},{b:"200+s",c:0,s:0}]},
+    h2:{bip:[{b:"0-15s",c:20,s:151},{b:"15-30s",c:14,s:284},{b:"30-60s",c:18,s:757},{b:"60-90s",c:3,s:225},{b:"90-120s",c:1,s:109},{b:"120-150s",c:3,s:400},{b:"150-200s",c:0,s:0},{b:"200+s",c:0,s:0}],bop:[{b:"0-15s",c:35,s:271},{b:"15-30s",c:11,s:252},{b:"30-60s",c:12,s:445},{b:"60-90s",c:1,s:69},{b:"90-120s",c:0,s:0},{b:"120-150s",c:0,s:0},{b:"150-200s",c:0,s:0},{b:"200+s",c:0,s:0}]}},
+  { opponent:"Sutherland Sharks FC", date:"06/03/2026", comp:"NPL", location:"AWAY",
+    fg:{bip:[{b:"0-15s",c:31,s:244},{b:"15-30s",c:14,s:312},{b:"30-60s",c:14,s:622},{b:"60-90s",c:13,s:957},{b:"90-120s",c:6,s:619},{b:"120-150s",c:5,s:654},{b:"150-200s",c:1,s:195},{b:"200+s",c:0,s:0}],bop:[{b:"0-15s",c:35,s:303},{b:"15-30s",c:24,s:555},{b:"30-60s",c:14,s:540},{b:"60-90s",c:5,s:346},{b:"90-120s",c:2,s:209},{b:"120-150s",c:0,s:0},{b:"150-200s",c:2,s:313},{b:"200+s",c:0,s:0}]},
+    h1:{bip:[{b:"0-15s",c:20,s:165},{b:"15-30s",c:5,s:121},{b:"30-60s",c:6,s:264},{b:"60-90s",c:8,s:596},{b:"90-120s",c:3,s:313},{b:"120-150s",c:3,s:398},{b:"150-200s",c:0,s:0},{b:"200+s",c:0,s:0}],bop:[{b:"0-15s",c:20,s:182},{b:"15-30s",c:17,s:401},{b:"30-60s",c:4,s:156},{b:"60-90s",c:3,s:222},{b:"90-120s",c:0,s:0},{b:"120-150s",c:0,s:0},{b:"150-200s",c:0,s:0},{b:"200+s",c:0,s:0}]},
+    h2:{bip:[{b:"0-15s",c:11,s:78},{b:"15-30s",c:9,s:190},{b:"30-60s",c:8,s:358},{b:"60-90s",c:5,s:361},{b:"90-120s",c:3,s:306},{b:"120-150s",c:2,s:256},{b:"150-200s",c:1,s:195},{b:"200+s",c:0,s:0}],bop:[{b:"0-15s",c:15,s:120},{b:"15-30s",c:7,s:154},{b:"30-60s",c:10,s:384},{b:"60-90s",c:2,s:124},{b:"90-120s",c:2,s:209},{b:"120-150s",c:0,s:0},{b:"150-200s",c:2,s:313},{b:"200+s",c:0,s:0}]}},
+  { opponent:"Manly United FC", date:"13/03/2026", comp:"NPL", location:"AWAY",
+    fg:{bip:[{b:"0-15s",c:48,s:388},{b:"15-30s",c:15,s:323},{b:"30-60s",c:35,s:1528},{b:"60-90s",c:5,s:341},{b:"90-120s",c:8,s:819},{b:"120-150s",c:0,s:0},{b:"150-200s",c:1,s:169},{b:"200+s",c:1,s:233}],bop:[{b:"0-15s",c:64,s:565},{b:"15-30s",c:30,s:643},{b:"30-60s",c:14,s:537},{b:"60-90s",c:3,s:246},{b:"90-120s",c:1,s:106},{b:"120-150s",c:0,s:0},{b:"150-200s",c:0,s:0},{b:"200+s",c:0,s:0}]},
+    h1:{bip:[{b:"0-15s",c:24,s:199},{b:"15-30s",c:9,s:190},{b:"30-60s",c:18,s:792},{b:"60-90s",c:2,s:132},{b:"90-120s",c:4,s:415},{b:"120-150s",c:0,s:0},{b:"150-200s",c:0,s:0},{b:"200+s",c:1,s:233}],bop:[{b:"0-15s",c:36,s:313},{b:"15-30s",c:16,s:328},{b:"30-60s",c:4,s:151},{b:"60-90s",c:1,s:89},{b:"90-120s",c:0,s:0},{b:"120-150s",c:0,s:0},{b:"150-200s",c:0,s:0},{b:"200+s",c:0,s:0}]},
+    h2:{bip:[{b:"0-15s",c:24,s:188},{b:"15-30s",c:6,s:133},{b:"30-60s",c:17,s:736},{b:"60-90s",c:3,s:209},{b:"90-120s",c:4,s:403},{b:"120-150s",c:0,s:0},{b:"150-200s",c:1,s:169},{b:"200+s",c:0,s:0}],bop:[{b:"0-15s",c:28,s:252},{b:"15-30s",c:14,s:315},{b:"30-60s",c:10,s:386},{b:"60-90s",c:2,s:157},{b:"90-120s",c:1,s:106},{b:"120-150s",c:0,s:0},{b:"150-200s",c:0,s:0},{b:"200+s",c:0,s:0}]}},
+  { opponent:"Sydney Olympic FC", date:"21/03/2026", comp:"NPL", location:"AWAY",
+    fg:{bip:[{b:"0-15s",c:36,s:251},{b:"15-30s",c:31,s:710},{b:"30-60s",c:20,s:858},{b:"60-90s",c:14,s:1031},{b:"90-120s",c:2,s:214},{b:"120-150s",c:0,s:0},{b:"150-200s",c:2,s:363},{b:"200+s",c:1,s:213}],bop:[{b:"0-15s",c:59,s:505},{b:"15-30s",c:28,s:595},{b:"30-60s",c:10,s:385},{b:"60-90s",c:6,s:454},{b:"90-120s",c:1,s:91},{b:"120-150s",c:0,s:0},{b:"150-200s",c:0,s:0},{b:"200+s",c:0,s:0}]},
+    h1:{bip:[{b:"0-15s",c:22,s:173},{b:"15-30s",c:14,s:301},{b:"30-60s",c:8,s:345},{b:"60-90s",c:7,s:499},{b:"90-120s",c:0,s:0},{b:"120-150s",c:0,s:0},{b:"150-200s",c:2,s:363},{b:"200+s",c:1,s:213}],bop:[{b:"0-15s",c:30,s:244},{b:"15-30s",c:16,s:336},{b:"30-60s",c:5,s:191},{b:"60-90s",c:2,s:151},{b:"90-120s",c:0,s:0},{b:"120-150s",c:0,s:0},{b:"150-200s",c:0,s:0},{b:"200+s",c:0,s:0}]},
+    h2:{bip:[{b:"0-15s",c:14,s:77},{b:"15-30s",c:17,s:409},{b:"30-60s",c:12,s:513},{b:"60-90s",c:7,s:532},{b:"90-120s",c:2,s:214},{b:"120-150s",c:0,s:0},{b:"150-200s",c:0,s:0},{b:"200+s",c:0,s:0}],bop:[{b:"0-15s",c:29,s:261},{b:"15-30s",c:12,s:259},{b:"30-60s",c:5,s:193},{b:"60-90s",c:4,s:303},{b:"90-120s",c:1,s:91},{b:"120-150s",c:0,s:0},{b:"150-200s",c:0,s:0},{b:"200+s",c:0,s:0}]}},
+  { opponent:"Marconi Stallions FC", date:"28/03/2026", comp:"NPL", location:"HOME",
+    fg:{bip:[{b:"0-15s",c:29,s:230},{b:"15-30s",c:28,s:611},{b:"30-60s",c:25,s:1063},{b:"60-90s",c:7,s:504},{b:"90-120s",c:5,s:556},{b:"120-150s",c:3,s:382},{b:"150-200s",c:1,s:196},{b:"200+s",c:1,s:221}],bop:[{b:"0-15s",c:44,s:339},{b:"15-30s",c:25,s:504},{b:"30-60s",c:21,s:793},{b:"60-90s",c:2,s:141},{b:"90-120s",c:2,s:197},{b:"120-150s",c:1,s:127},{b:"150-200s",c:0,s:0},{b:"200+s",c:0,s:0}]},
+    h1:{bip:[{b:"0-15s",c:16,s:130},{b:"15-30s",c:16,s:355},{b:"30-60s",c:13,s:540},{b:"60-90s",c:2,s:132},{b:"90-120s",c:5,s:556},{b:"120-150s",c:0,s:0},{b:"150-200s",c:0,s:0},{b:"200+s",c:0,s:0}],bop:[{b:"0-15s",c:19,s:160},{b:"15-30s",c:17,s:329},{b:"30-60s",c:12,s:473},{b:"60-90s",c:2,s:141},{b:"90-120s",c:1,s:107},{b:"120-150s",c:0,s:0},{b:"150-200s",c:0,s:0},{b:"200+s",c:0,s:0}]},
+    h2:{bip:[{b:"0-15s",c:13,s:99},{b:"15-30s",c:12,s:255},{b:"30-60s",c:12,s:523},{b:"60-90s",c:5,s:372},{b:"90-120s",c:0,s:0},{b:"120-150s",c:3,s:382},{b:"150-200s",c:1,s:196},{b:"200+s",c:1,s:221}],bop:[{b:"0-15s",c:25,s:179},{b:"15-30s",c:8,s:174},{b:"30-60s",c:9,s:320},{b:"60-90s",c:0,s:0},{b:"90-120s",c:1,s:90},{b:"120-150s",c:1,s:127},{b:"150-200s",c:0,s:0},{b:"200+s",c:0,s:0}]}}
+];
+
+// ========== INIT ==========
+games = JSON.parse(JSON.stringify(DEFAULT_GAMES));
+
+// ========== SCORE HELPERS ==========
+function getScoreColor(score) {
+  return score>=75?'#27AE60':score>=50?'#F39C12':score>=30?'#E67E22':'#3498DB';
+}
+function getScoreLabel(score) {
+  return score>=75?'MATCH-APPROXIMATE':score>=50?'MATCH-ADJACENT':score>=30?'TACTICAL/STRUCTURAL':'INTENSITY ISOLATED';
+}
+
+// ========== BENCHMARK COMPUTATION ==========
+function computeBenchmarks() {
+  const nplGames = games.filter(g => g.comp === 'NPL');
+  if (!nplGames.length) return null;
+  const result = {};
+  [['fg',0],['h1',1],['h2',2]].forEach(([key, halfIdx]) => {
+    const bipDists=[], bipTotals=[], bopTotals=[], bopMedians=[];
+    nplGames.forEach(game => {
+      const half = key==='fg'?game.fg:key==='h1'?game.h1:game.h2;
+      const bipTotal = half.bip.reduce((a,x)=>a+x.s,0);
+      const bopTotal = half.bop.reduce((a,x)=>a+x.s,0);
+      if (!bipTotal) return;
+      const dist={};
+      BINS.forEach(b => { const row=half.bip.find(x=>x.b===b); dist[b]=row?(row.s/bipTotal):0; });
+      bipDists.push(dist); bipTotals.push(bipTotal); bopTotals.push(bopTotal);
+      const mp={"0-15s":7.5,"15-30s":22.5,"30-60s":45,"60-90s":75,"90-120s":105,"120-150s":135,"150-200s":175,"200+s":230};
+      let ws=0,cnt=0;
+      BINS.forEach(b=>{ const r=half.bop.find(x=>x.b===b); if(r){ws+=r.c*(mp[b]||0);cnt+=r.c;} });
+      if(cnt>0) bopMedians.push(ws/cnt);
+    });
+    if (!bipDists.length) { result[halfIdx]=null; return; }
+    const avgDist={};
+    BINS.forEach(b=>{ avgDist[b]=bipDists.reduce((a,d)=>a+d[b],0)/bipDists.length; });
+    const total=Object.values(avgDist).reduce((a,x)=>a+x,0);
+    BINS.forEach(b=>avgDist[b]=avgDist[b]/total);
+    const avgBip=bipTotals.reduce((a,x)=>a+x,0)/bipTotals.length;
+    const avgBop=bopTotals.reduce((a,x)=>a+x,0)/bopTotals.length;
+    // BOP dist
+    const bopD={};
+    BINS.forEach(b=>{
+      const vals=nplGames.map(g=>{ const h=key==='fg'?g.fg:key==='h1'?g.h1:g.h2; const bt=h.bop.reduce((a,x)=>a+x.s,0); const r=h.bop.find(x=>x.b===b); return bt?(r?r.s/bt:0):0; });
+      bopD[b]=parseFloat((vals.reduce((a,x)=>a+x,0)/vals.length*100).toFixed(1));
+    });
+    result[halfIdx]={
+      label:key==='fg'?'Full Game':key==='h1'?'1st Half':'2nd Half',
+      bip_dist:Object.fromEntries(BINS.map(b=>[b,parseFloat((avgDist[b]*100).toFixed(1))])),
+      bop_dist:bopD,
+      avg_bip_mins:parseFloat((avgBip/60).toFixed(1)),
+      avg_bop_mins:parseFloat((avgBop/60).toFixed(1)),
+      avg_bip_count:Math.round(nplGames.reduce((a,g)=>{ const h=key==='fg'?g.fg:key==='h1'?g.h1:g.h2; return a+h.bip.reduce((s,x)=>s+x.c,0); },0)/nplGames.length),
+      avg_bop_count:Math.round(nplGames.reduce((a,g)=>{ const h=key==='fg'?g.fg:key==='h1'?g.h1:g.h2; return a+h.bop.reduce((s,x)=>s+x.c,0); },0)/nplGames.length),
+      bip_pct:parseFloat(((avgBip/(avgBip+avgBop))*100).toFixed(1)),
+      wr_ratio:parseFloat((avgBip/avgBop).toFixed(2)),
+      est_median_bop:parseFloat((bopMedians.length?bopMedians.reduce((a,x)=>a+x,0)/bopMedians.length:22).toFixed(1)),
+      n_games:nplGames.length
+    };
+  });
+  return result;
+}
+
+// ========== SEASON CHART HALF TOGGLE ==========
+function setSeasonChartHalf(half, btn, chartType) {
+  if (chartType === 'bip') {
+    bipChartHalf = half;
+    document.querySelectorAll('[id^="bip-chart-"]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderSeasonBIPChart();
+  } else {
+    bopChartHalf = half;
+    document.querySelectorAll('[id^="bop-chart-"]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderSeasonBOPChart();
+  }
+}
+
+// ========== RENDER ==========
+function updateAll() {
+  const npl = games.filter(g=>g.comp==='NPL').length;
+  const total = games.length;
+  document.getElementById('data-status').textContent = npl+' NPL · '+total+' total';
+  document.getElementById('data-status').className = 'data-status live';
+  document.getElementById('bench-subtitle').textContent = npl+' NPL games · auto-calculated from uploaded data';
+  renderBenchmark(currentBenchmarkHalf);
+  renderGameList();
+  renderSeasonBIPChart();
+  renderSeasonBOPChart();
+}
+
+function showBenchmark(half, btn) {
+  document.querySelectorAll('.half-btn').forEach(b => {
+    if (b.id && b.id.startsWith('bip-chart')) return;
+    if (b.id && b.id.startsWith('bop-chart')) return;
+    b.classList.remove('active');
+  });
+  btn.classList.add('active');
+  currentBenchmarkHalf = half;
+  renderBenchmark(half);
+}
+
+function renderBenchmark(half) {
+  const benchmarks = computeBenchmarks();
+  if (!benchmarks || !benchmarks[half]) {
+    document.getElementById('benchmark-content').innerHTML = '<div class="empty-state">No NPL data available.</div>';
+    return;
+  }
+  const d = benchmarks[half];
+  const container = document.getElementById('benchmark-content');
+
+  const bipBars = BINS.map(b => {
+    const pct=d.bip_dist[b]||0, opacity=Math.min(1,0.4+(pct/35)*0.6);
+    return `<div class="bin-row"><div class="bin-label">${b}</div><div class="bin-track"><div class="bin-fill bip-fill" style="width:${pct}%;opacity:${opacity}"></div></div><div class="bin-pct">${pct}%</div></div>`;
+  }).join('');
+
+  const bopBars = BINS.map(b => {
+    const pct=d.bop_dist[b]||0, opacity=Math.min(1,0.4+(pct/35)*0.6);
+    return `<div class="bin-row"><div class="bin-label">${b}</div><div class="bin-track"><div class="bin-fill bop-fill" style="width:${pct}%;opacity:${opacity}"></div></div><div class="bin-pct">${pct}%</div></div>`;
+  }).join('');
+
+  container.innerHTML = `
+    <div class="benchmark-grid">
+      <div class="stat-box"><div class="stat-val">${d.avg_bip_mins}<span style="font-size:14px;font-weight:400;">m</span></div><div class="stat-label">Avg BIP Time</div></div>
+      <div class="stat-box"><div class="stat-val">${d.avg_bop_mins}<span style="font-size:14px;font-weight:400;">m</span></div><div class="stat-label">Avg BOP Time</div></div>
+      <div class="stat-box"><div class="stat-val">${d.bip_pct}<span style="font-size:14px;font-weight:400;">%</span></div><div class="stat-label">BIP Density</div></div>
+      <div class="stat-box">
+        <div class="stat-val">${d.wr_ratio}</div>
+        <div class="stat-label">Avg W:R Ratio</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:4px;">≈ ${Math.round(60/d.wr_ratio)}s rest per 60s play</div>
+      </div>
+      <div class="stat-box"><div class="stat-val">${d.est_median_bop}<span style="font-size:14px;font-weight:400;">s</span></div><div class="stat-label">Est. Median BOP</div></div>
+      <div class="stat-box"><div class="stat-val">${d.n_games}</div><div class="stat-label">NPL Games</div></div>
+    </div>
+    <div class="dist-grid">
+      <div class="card"><div class="card-title">Ball In Play — % Time by Duration Bin</div>${bipBars}
+        <div style="margin-top:10px;font-size:10px;color:var(--muted);">Core mass: 15–60s = ${((d.bip_dist['15-30s']||0)+(d.bip_dist['30-60s']||0)).toFixed(1)}% of BIP time</div>
+      </div>
+      <div class="card"><div class="card-title">Ball Out Of Play — % Time by Duration Bin</div>${bopBars}
+        <div style="margin-top:10px;font-size:10px;color:var(--muted);">Fast restart (≤15s) = ${(d.bop_dist['0-15s']||0).toFixed(1)}% of BOP time</div>
+      </div>
+    </div>`;
+}
+
+// ========== SEASON BIP% CHART ==========
+function renderSeasonBIPChart() {
+  var halfKey = ['fg','h1','h2'][bipChartHalf];
+  var nplGames = games.filter(g=>g.comp==='NPL');
+  var container = document.getElementById('season-bip-chart');
+  if (!nplGames.length) { container.innerHTML='<div style="color:#777;font-size:12px;padding:20px;">No NPL games loaded</div>'; return; }
+
+  var pcts = nplGames.map(g => {
+    var half = halfKey==='fg'?g.fg:halfKey==='h1'?g.h1:g.h2;
+    var bip=half.bip.reduce((a,x)=>a+x.s,0), bop=half.bop.reduce((a,x)=>a+x.s,0);
+    return bip+bop>0?(bip/(bip+bop))*100:0;
+  });
+
+  var b=computeBenchmarks(), BENCH=b&&b[bipChartHalf]?b[bipChartHalf].bip_pct:62.5;
+  renderBarChart(container, nplGames, pcts, BENCH, 'bip', '%');
+
+  // Quick stats
+  var qs=document.getElementById('season-quick-stats');
+  if(qs&&pcts.length){
+    var avg=(pcts.reduce((a,b)=>a+b,0)/pcts.length).toFixed(1), hi=Math.max(...pcts).toFixed(1), lo=Math.min(...pcts).toFixed(1);
+    qs.innerHTML='<span>Avg: <strong style="color:#E8E8E8">'+avg+'%</strong></span>'
+      +'<span>Best: <strong style="color:#27AE60">'+hi+'%</strong></span>'
+      +'<span>Low: <strong style="color:#C8A951">'+lo+'%</strong></span>'
+      +'<span style="color:#333">|</span><span style="color:#555;">'+pcts.length+' games</span>';
+  }
+}
+
+// ========== SEASON MEDIAN BOP CHART ==========
+function renderSeasonBOPChart() {
+  var halfKey = ['fg','h1','h2'][bopChartHalf];
+  var nplGames = games.filter(g=>g.comp==='NPL');
+  var container = document.getElementById('season-bop-chart');
+  if (!nplGames.length) { container.innerHTML='<div style="color:#777;font-size:12px;padding:20px;">No NPL games loaded</div>'; return; }
+
+  var mp={"0-15s":7.5,"15-30s":22.5,"30-60s":45,"60-90s":75,"90-120s":105,"120-150s":135,"150-200s":175,"200+s":230};
+  var vals = nplGames.map(g => {
+    var half = halfKey==='fg'?g.fg:halfKey==='h1'?g.h1:g.h2;
+    var ws=0,cnt=0;
+    half.bop.forEach(r=>{ws+=r.c*(mp[r.b]||0);cnt+=r.c;});
+    return cnt>0?Math.round(ws/cnt):0;
+  });
+
+  var b=computeBenchmarks(), BENCH_BOP=b&&b[bopChartHalf]?b[bopChartHalf].est_median_bop:22;
+  renderBarChart(container, nplGames, vals, BENCH_BOP, 'bop', 's');
+}
+
+function renderBarChart(container, nplGames, vals, BENCH, type, unit) {
+  var allVals=vals.concat([BENCH]);
+  var minP=Math.min(...allVals), maxP=Math.max(...allVals);
+  // For BOP, lower = better (invert colors). For BIP, higher = better.
+  var isBOP = type==='bop';
+  var axMin=Math.max(0,Math.floor((minP-5)/5)*5), axMax=Math.ceil((maxP+3)/5)*5, axR=axMax-axMin;
+  var BAR_H=160, Y_AXIS_W=38;
+  function p2h(p){return Math.max(0,Math.round(((p-axMin)/axR)*BAR_H));}
+
+  var containerW=container.offsetWidth||700;
+  var chartW=Math.max(containerW-Y_AXIS_W, nplGames.length*50);
+  var n=nplGames.length;
+  var BAR_SLOT=Math.floor(chartW/n), BAR_GAP=Math.max(4,Math.floor(BAR_SLOT*0.12)), BAR_W=BAR_SLOT-BAR_GAP;
+
+  // Y axis ticks
+  var tickStep=axR<=20?2:axR<=50?5:10, tHtml='';
+  for(var t=axMin;t<=axMax;t+=tickStep){
+    var topPx=BAR_H-p2h(t);
+    tHtml+='<div style="position:absolute;top:'+topPx+'px;left:0;width:'+Y_AXIS_W+'px;display:flex;align-items:center;justify-content:flex-end;pointer-events:none;">'
+      +'<span style="font-size:10px;color:#555;padding-right:5px;line-height:1;">'+t+unit+'</span>'
+      +'</div>';
+  }
+
+  // Benchmark line
+  var rH=p2h(BENCH), rTop=BAR_H-rH;
+  var refLine='<div style="position:absolute;left:0;right:0;top:'+rTop+'px;border-top:2px dashed rgba(200,200,200,0.5);pointer-events:none;z-index:3;">'
+    +'<span style="position:absolute;left:4px;top:-16px;font-size:11px;font-weight:700;color:rgba(200,200,200,0.7);background:rgba(0,0,0,0.4);padding:1px 5px;border-radius:2px;">avg: '+BENCH+unit+'</span>'
+    +'</div>';
+
+  var barRow='', metaRow='';
+  nplGames.forEach((g,gi) => {
+    var val=vals[gi], barH=p2h(val);
+    var col;
+    if(isBOP) {
+      col = val<=BENCH?'#27AE60':val<=BENCH*1.3?'#C8A951':'#E74C3C';
+    } else {
+      col = val>=BENCH?'#27AE60':val>=BENCH-10?'#C8A951':'#4A5568';
+    }
+    var lblBot=barH>24?'4px':String(barH+4)+'px';
+    var lblCol=barH>24?'rgba(255,255,255,0.93)':col;
+    var locBg=g.location==='HOME'?'rgba(39,174,96,0.18)':'rgba(200,169,81,0.18)';
+    var locCol=g.location==='HOME'?'#27AE60':'#C8A951';
+    var locTxt=g.location==='HOME'?'H':'A';
+    var shortDate=g.date.slice(0,5);
+    var shortName=g.opponent.replace(' FC','').replace(' FA','').replace(' Stallions','').split(' ').slice(0,2).join(' ');
+
+    var displayVal = type==='bip' ? val.toFixed(1) : Math.round(val);
+    barRow+='<div style="flex:1;min-width:0;display:flex;justify-content:center;" title="'+g.opponent+' ('+g.location+'): '+(type==='bip'?val.toFixed(1):Math.round(val))+unit+'">'
+      +'<div style="position:relative;width:'+BAR_W+'px;height:'+BAR_H+'px;">'
+      +'<div style="position:absolute;bottom:0;left:0;right:0;height:'+barH+'px;background:'+col+';border-radius:3px 3px 0 0;"></div>'
+      +'<div style="position:absolute;bottom:'+lblBot+';left:0;right:0;text-align:center;font-weight:700;font-size:11px;color:'+lblCol+';line-height:1;">'+displayVal+unit+'</div>'
+      +'</div>'
+      +'</div>';
+
+    metaRow+='<div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:2px;padding-top:5px;">'
+      +'<span style="font-size:8px;color:#666;text-align:center;line-height:1.2;">'+shortName+'</span>'
+      +'<span style="font-size:9px;padding:1px 5px;border-radius:2px;background:'+locBg+';color:'+locCol+';font-weight:700;">'+locTxt+'</span>'
+      +'<span style="font-size:8px;color:#555;line-height:1.2;">'+shortDate+'</span>'
+      +'</div>';
+  });
+
+  container.innerHTML=
+    '<div style="position:relative;width:100%;">'
+    +'<div style="position:absolute;left:0;top:0;width:'+Y_AXIS_W+'px;height:'+BAR_H+'px;pointer-events:none;z-index:2;">'+tHtml+'</div>'
+    +'<div style="position:relative;margin-left:'+Y_AXIS_W+'px;">'
+    +'<div style="position:relative;height:'+BAR_H+'px;">'
+    +refLine
+    +'<div style="position:absolute;left:0;right:0;top:0;bottom:0;display:flex;align-items:flex-end;">'+barRow+'</div>'
+    +'</div>'
+    +'<div style="display:flex;">'+metaRow+'</div>'
+    +'</div>'
+    +'</div>';
+
+  if (!container._resizeObserver) {
+    container._resizeObserver = new ResizeObserver(() => {
+      if(type==='bip') renderSeasonBIPChart();
+      else renderSeasonBOPChart();
+    });
+    container._resizeObserver.observe(container);
+  }
+}
+
+// ========== GAME LIST ==========
+function renderGameList() {
+  const tbody=document.getElementById('game-list-body');
+  const empty=document.getElementById('game-list-empty');
+  if(!games.length){tbody.innerHTML='';empty.style.display='block';return;}
+  empty.style.display='none';
+  const sorted=[...games].sort((a,b)=>a.date.split('/').reverse().join('')>b.date.split('/').reverse().join('')?1:-1);
+
+  // Home/Away split
+  const splitEl=document.getElementById('home-away-split');
+  if(splitEl){
+    const nplG=games.filter(g=>g.comp==='NPL');
+    const hG=nplG.filter(g=>g.location==='HOME'), aG=nplG.filter(g=>g.location==='AWAY');
+    function avgB(gs){ if(!gs.length)return null; return (gs.map(g=>{const b=g.fg.bip.reduce((a,x)=>a+x.s,0),p=g.fg.bop.reduce((a,x)=>a+x.s,0);return b+p>0?(b/(b+p))*100:0;}).reduce((a,v)=>a+v,0)/gs.length).toFixed(1);}
+    const hP=avgB(hG),aP=avgB(aG),diff=hP&&aP?(parseFloat(hP)-parseFloat(aP)).toFixed(1):null;
+    const dCol=diff===null?'#777':parseFloat(diff)>0?'#27AE60':parseFloat(diff)<0?'#E74C3C':'#C8A951';
+    splitEl.innerHTML=nplG.length?'<div style="display:flex;gap:12px;font-size:11px;padding:8px 12px;background:var(--panel2);border:1px solid var(--border);border-radius:3px;">'
+      +'<span style="color:#777;letter-spacing:1px;text-transform:uppercase;font-size:10px;align-self:center;">H/A Split:</span>'
+      +'<span style="color:#27AE60"><strong>H '+(hP||'—')+'%</strong> ('+hG.length+'g)</span>'
+      +'<span style="color:#C8A951"><strong>A '+(aP||'—')+'%</strong> ('+aG.length+'g)</span>'
+      +(diff!==null?'<span style="color:'+dCol+'">'+(parseFloat(diff)>0?'+':'')+diff+'% home</span>':'')
+      +'</div>':'';
+  }
+
+  const mp={"0-15s":7.5,"15-30s":22.5,"30-60s":45,"60-90s":75,"90-120s":105,"120-150s":135,"150-200s":175,"200+s":230};
+  tbody.innerHTML=sorted.map(g => {
+    const ri=games.indexOf(g);
+    const bipTotal=g.fg.bip.reduce((a,x)=>a+x.s,0),bopTotal=g.fg.bop.reduce((a,x)=>a+x.s,0);
+    const bipPct=bipTotal+bopTotal>0?((bipTotal/(bipTotal+bopTotal))*100).toFixed(1):'—';
+    let ws=0,cnt=0;
+    g.fg.bop.forEach(r=>{ws+=r.c*(mp[r.b]||0);cnt+=r.c;});
+    const medBOP=cnt?Math.round(ws/cnt):'—';
+    const frC=g.fg.bop.filter(r=>r.b==='0-15s').reduce((a,r)=>a+r.c,0);
+    const totBC=g.fg.bop.reduce((a,r)=>a+r.c,0);
+    const fp=totBC?Math.round((frC/totBC)*100):0;
+    const fpCol=fp>=30?'#27AE60':fp>=15?'#C8A951':'#777';
+    const cCls=g.comp==='NPL'?'comp-npl':'comp-20s';
+    const lCls=g.location==='HOME'?'loc-h':'loc-a';
+    return '<tr>'
+      +'<td style="font-weight:500;">'+g.opponent+'</td>'
+      +'<td style="color:#777">'+g.date+'</td>'
+      +'<td><span class="comp-badge '+cCls+'">'+g.comp+'</span></td>'
+      +'<td><span class="loc-badge '+lCls+'">'+g.location.slice(0,1)+'</span></td>'
+      +'<td style="font-weight:700;color:var(--red-light)">'+bipPct+'%</td>'
+      +'<td style="color:#777">'+medBOP+'s</td>'
+      +'<td style="color:'+fpCol+'">'+fp+'%</td>'
+      +'<td><button class="remove-game" onclick="removeGame('+ri+')">&#x2715;</button></td>'
+      +'</tr>';
+  }).join('');
+}
+
+function removeGame(idx) {
+  games.splice(idx,1);
+  updateAll();
+  saveToStorage().catch(()=>{});
+}
+
+// ========== TABS ==========
+function showTab(id) {
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  const tabs=['benchmarks','audit','session','calendar','library','reference','gpsreader'];
+  const idx=tabs.indexOf(id);
+  if(idx>=0) document.querySelectorAll('.nav-tab')[idx].classList.add('active');
+}
+
+// ========== CSV PARSING ==========
+function parseCSV(text, filename) {
+  const lines=text.split('\n');
+  const sessionLine=lines.find(l=>l.startsWith('Session:'));
+  const sessionName=sessionLine?sessionLine.replace('Session:','').trim():filename;
+  const is20s=/20.?s/i.test(sessionName)||/20'/i.test(sessionName);
+  const comp=is20s?"20's":"NPL";
+  const locMatch=sessionName.match(/\(([AH])\)/i);
+  const location=locMatch?(locMatch[1].toUpperCase()==='H'?'HOME':'AWAY'):'HOME';
+  const opponentRaw=sessionName.replace(/\s*\([AH]\)\s*/i,'').replace(/\s*-\s*20.?s\s*/i,'').trim();
+  const dateMatch=filename.match(/(\d{4}-\d{2}-\d{2})/);
+  let date=dateMatch?dateMatch[1].split('-').reverse().join('/'):'';
+
+  function parseSection(marker) {
+    let inSection=false,inRaw=false;
+    const seqs=[],flags=[];
+    for(let i=0;i<lines.length;i++){
+      const l=lines[i].trim();
+      if(l===marker){inSection=true;inRaw=false;continue;}
+      if(inSection&&l==='RAW DATA'){inRaw=true;continue;}
+      if(inRaw&&l.startsWith('Period,'))continue;
+      if(inRaw&&l===''&&seqs.length>0)break;
+      if(inRaw&&l&&!l.startsWith('Ratio')&&!l.startsWith('Top')&&!l.startsWith('Bottom')&&!l.startsWith('Stacked')){
+        const parts=l.split(',');
+        if(parts.length>=3){
+          try{
+            const typ=parts[1].trim();
+            const [mm,ss]=parts[2].trim().split(':').map(Number);
+            const durSecs=mm*60+ss;
+            if(durSecs>FLAG_THRESHOLD)flags.push({period:parts[0],type:typ,secs:durSecs,durStr:parts[2].trim()});
+            seqs.push({type:typ,secs:durSecs,flagged:durSecs>FLAG_THRESHOLD});
+          }catch(e){}
+        }
+      }
+    }
+    return {seqs,flags};
+  }
+
+  function seqsToBins(seqs,type){
+    return BINS.map((b,i)=>{
+      const [lo,hi]=BIN_RANGES[i];
+      const matching=seqs.filter(s=>s.type===type&&!s.flagged&&s.secs>=lo&&s.secs<hi);
+      return {b,c:matching.length,s:matching.reduce((a,x)=>a+x.secs,0)};
+    });
+  }
+
+  const fg=parseSection('FULL MATCH'),h1=parseSection('1ST HALF'),h2=parseSection('2ND HALF');
+  const allFlags=[...fg.flags,...h1.flags.filter(f=>!fg.flags.some(x=>x.period===f.period)),...h2.flags.filter(f=>!fg.flags.some(x=>x.period===f.period))];
+  const game={opponent:opponentRaw,date,comp,location,
+    fg:{bip:seqsToBins(fg.seqs,'IN'),bop:seqsToBins(fg.seqs,'OUT')},
+    h1:{bip:seqsToBins(h1.seqs,'IN'),bop:seqsToBins(h1.seqs,'OUT')},
+    h2:{bip:seqsToBins(h2.seqs,'IN'),bop:seqsToBins(h2.seqs,'OUT')}};
+  const bipTotal=fg.seqs.filter(s=>s.type==='IN'&&!s.flagged).reduce((a,s)=>a+s.secs,0);
+  const bopTotal=fg.seqs.filter(s=>s.type==='OUT'&&!s.flagged).reduce((a,s)=>a+s.secs,0);
+  const bipPct=bipTotal+bopTotal>0?((bipTotal/(bipTotal+bopTotal))*100).toFixed(1):'—';
+  const bopSeqs=fg.seqs.filter(s=>s.type==='OUT'&&!s.flagged).map(s=>s.secs).sort((a,b)=>a-b);
+  const medBOP=bopSeqs.length?bopSeqs[Math.floor(bopSeqs.length/2)]:0;
+  return {game,flags:allFlags,sessionName,comp,bipPct,medBOP,
+    totalSeqs:fg.seqs.length,bipSeqs:fg.seqs.filter(s=>s.type==='IN').length,
+    bopSeqs2:fg.seqs.filter(s=>s.type==='OUT').length};
+}
+
+function handleFileSelect(evt) {
+  const files=Array.from(evt.target.files);
+  evt.target.value='';
+  processFiles(files,0);
+}
+function processFiles(files,idx) {
+  if(idx>=files.length)return;
+  const file=files[idx];
+  const reader=new FileReader();
+  reader.onload=e=>{ const result=parseCSV(e.target.result,file.name); showParseModal(result,()=>processFiles(files,idx+1)); };
+  reader.readAsText(file);
+}
+
+function showParseModal(result,next) {
+  pendingParseResult=result; onModalConfirm=next;
+  document.getElementById('modal-filename').textContent=result.sessionName;
+  const isDupe=games.some(g=>g.opponent===result.game.opponent&&g.date===result.game.date&&g.comp===result.game.comp);
+  let statsHtml=`<div class="parse-stat"><span>Competition</span><span>${result.comp}</span></div><div class="parse-stat"><span>Location</span><span>${result.game.location}</span></div><div class="parse-stat"><span>Date detected</span><span>${result.game.date||'Not found'}</span></div><div class="parse-stat"><span>Total sequences</span><span>${result.totalSeqs}</span></div><div class="parse-stat"><span>BIP sequences</span><span>${result.bipSeqs}</span></div><div class="parse-stat"><span>BOP sequences</span><span>${result.bopSeqs2}</span></div><div class="parse-stat"><span>Calculated BIP %</span><span>${result.bipPct}%</span></div><div class="parse-stat"><span>Median BOP (est.)</span><span>${result.medBOP}s</span></div><div class="parse-stat"><span>Flagged sequences (>${FLAG_THRESHOLD}s)</span><span style="color:${result.flags.length>0?'#E67E22':'#2ECC71'}">${result.flags.length}</span></div>`;
+  if(isDupe) statsHtml+=`<div class="parse-stat"><span>Duplicate detected</span><span style="color:#E67E22;">Already in dataset</span></div>`;
+  document.getElementById('modal-stats').innerHTML=statsHtml;
+  let flagsHtml='';
+  if(result.flags.length){
+    flagsHtml='<div class="flag-list"><div style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:8px;">Flagged & Auto-Excluded</div>';
+    result.flags.forEach(f=>{ flagsHtml+=`<div class="flag-item">⚠ Period ${f.period} · ${f.type==='IN'?'BIP':'BOP'} · ${f.durStr} (${f.secs}s) exceeds threshold</div>`; });
+    flagsHtml+='<div class="fix-item">ℹ Auto-fix applied: flagged sequences removed from bin distributions.</div></div>';
+  }
+  document.getElementById('modal-flags').innerHTML=flagsHtml;
+  document.getElementById('modal-confirm-btn').textContent=isDupe?'REPLACE EXISTING':'ADD TO DATASET';
+  document.getElementById('parse-modal').classList.add('open');
+}
+function closeModal() {
+  document.getElementById('parse-modal').classList.remove('open');
+  pendingParseResult=null;
+  if(onModalConfirm){const next=onModalConfirm;onModalConfirm=null;next();}
+}
+function confirmUpload() {
+  if(!pendingParseResult)return;
+  const r=pendingParseResult;
+  const dupeIdx=games.findIndex(g=>g.opponent===r.game.opponent&&g.date===r.game.date&&g.comp===r.game.comp);
+  if(dupeIdx>=0)games.splice(dupeIdx,1);
+  r.game._uploaded=true;
+  games.push(r.game);
+  document.getElementById('parse-modal').classList.remove('open');
+  pendingParseResult=null;
+  updateAll();
+  saveToStorage().catch(()=>{});
+  if(onModalConfirm){const next=onModalConfirm;onModalConfirm=null;next();}
+}
+
+// ========== DRILL SCORING ==========
+function calculateScore() {
+  const format=document.getElementById('drill-format').value;
+  if(format==='excluded'){
+    document.getElementById('audit-results').innerHTML='<div class="card"><div style="text-align:center;padding:28px;"><div style="font-weight:900;font-size:20px;color:#3498DB;margin-bottom:8px;">BIP-EXCLUDED DRILL</div><div style="color:#777;font-size:13px;">Wave games and interval formats are excluded from BIP Profile Index. Classified as <strong style="color:#3498DB;">Type A — Intensity Isolated</strong>.</div></div></div>';
+    pendingDrill={name:document.getElementById('drill-name').value||'Unnamed',duration:0,bipMins:0,bipPct:'0',medBOP:0,score:0,distScore:0,restartScore:0,densityScore:0,type:'TYPE A — Intensity Isolated',format:'excluded',binCounts:[]};
+    return;
+  }
+  const benchmarks=computeBenchmarks();
+  const halfKey=parseInt(document.getElementById('benchmark-half').value);
+  const bench=benchmarks?benchmarks[halfKey]:null;
+  if(!bench){alert('No benchmark data available.');return;}
+  const drillName=document.getElementById('drill-name').value||'Unnamed Drill';
+  const duration=parseFloat(document.getElementById('drill-duration').value)||0;
+  const bipMins=parseFloat(document.getElementById('drill-bip').value)||0;
+  const medBOP=parseFloat(document.getElementById('drill-median-bop').value)||0;
+  const binVals=BINS.map((_,i)=>parseFloat(document.getElementById('b'+i).value)||0);
+  const totalBinCount=binVals.reduce((a,b)=>a+b,0);
+  if(!duration||!bipMins||!medBOP||!totalBinCount){alert('Please fill in all fields including at least one bin count.');return;}
+  
+  // Read GPS inputs (optional)
+  const gpsTotalDist = parseFloat(document.getElementById('drill-totaldist').value) || 0;
+  const gpsHSR = parseFloat(document.getElementById('drill-hsr').value) || 0;
+  const gpsHMLD = parseFloat(document.getElementById('drill-hmld').value) || 0;
+  const gpsMaxVel = parseFloat(document.getElementById('drill-maxvel').value) || 0;
+  const gpsAccels = parseFloat(document.getElementById('drill-accels').value) || 0;
+  const gpsDecels = parseFloat(document.getElementById('drill-decels').value) || 0;
+  const gpsBenchmarkIdx = parseInt(document.getElementById('gps-benchmark-select').value);
+  
+  const hasGPSData = gpsTotalDist > 0 || gpsHSR > 0 || gpsHMLD > 0 || gpsAccels > 0 || gpsDecels > 0 || gpsMaxVel > 0;
+  let gpsData = null;
+  let gmiResult = null;
+  
+  if (hasGPSData && !isNaN(gpsBenchmarkIdx) && matchGPSBenchmarks.history[gpsBenchmarkIdx]) {
+    gpsData = {totalDist: gpsTotalDist, hsr: gpsHSR, hmld: gpsHMLD, maxVel: gpsMaxVel, accels: gpsAccels, decels: gpsDecels};
+    gmiResult = calculateGMI(gpsData, duration, matchGPSBenchmarks.history[gpsBenchmarkIdx]);
+  }
+  
+  const drillDist={};
+  BINS.forEach((b,i)=>{drillDist[b]=totalBinCount>0?(binVals[i]/totalBinCount)*100:0;});
+  let sadSum=0;
+  BINS.forEach(b=>{sadSum+=Math.abs(drillDist[b]-(bench.bip_dist[b]||0));});
+  const distScore=Math.max(0,100-sadSum);
+  const restartScore=medBOP<=bench.est_median_bop?100:Math.max(0,100-((medBOP-bench.est_median_bop)/2.5));
+  const drillBipPct=duration>0?(bipMins/duration)*100:0;
+  const densityScore=Math.max(0,100-Math.abs(drillBipPct-bench.bip_pct)*2);
+  const compositeScore=Math.round(distScore*0.4+restartScore*0.4+densityScore*0.2);
+  
+  // Calculate MRS if GPS data available
+  const gmiScore = gmiResult ? gmiResult.gmi : null;
+  const mrsScore = gmiScore !== null ? Math.round(compositeScore * 0.6 + gmiScore * 0.4) : null;
+  
+  const scoreColor=getScoreColor(mrsScore !== null ? mrsScore : compositeScore);
+  const rm=medBOP<=20?'PRESS':medBOP<=35?'NORM':'RECOVERY';
+  const short=(drillDist['0-15s']||0)+(drillDist['15-30s']||0);
+  const matchP=(drillDist['15-30s']||0)+(drillDist['30-60s']||0);
+  const sustained=(drillDist['60-90s']||0)+(drillDist['90-120s']||0);
+  const sp=short>=60?'SHORT-BURST':matchP>=40?'MATCH-PROFILE':sustained>=35?'SUSTAINED':'MIXED';
+  const dt=compositeScore>=60?'TYPE B — Match-Approximate':medBOP>45?'TYPE A — Intensity Overload':'TYPE C — Volume/Structure';
+  const compBars=BINS.map(b=>{
+    const mPct=bench.bip_dist[b]||0,dPct=Math.round(drillDist[b]);
+    return `<div class="dist-comp-row"><div class="dist-comp-label">${b}</div><div class="dist-comp-bars"><div class="dist-comp-bar match-bar" style="width:${mPct}%"></div><div class="dist-comp-bar drill-bar" style="width:${dPct}%"></div></div><div style="font-size:10px;color:#777;width:90px;flex-shrink:0;">M:${mPct}% D:${dPct}%</div></div>`;
+  }).join('');
+  
+  pendingDrill={name:drillName,duration,bipMins,bipPct:drillBipPct.toFixed(1),medBOP,score:compositeScore,distScore:Math.round(distScore),restartScore:Math.round(restartScore),densityScore:Math.round(densityScore),type:dt,format,binCounts:binVals.slice(),gps:gpsData,gmiScore,mrsScore};
+  
+  let out='';
+  
+  // Main score display - show MRS if GPS data available, otherwise BPI
+  if (mrsScore !== null) {
+    out+=`<div class="score-display" style="--score-col:${scoreColor};"><div class="score-label-sm">${drillName} — MATCH REPLICATION SCORE</div><div class="score-number" style="color:${scoreColor}">${mrsScore}</div><div class="score-classification" style="color:${scoreColor}">${getScoreLabel(mrsScore)}</div></div>`;
+    out+=`<div class="component-scores"><div class="comp-score"><div class="comp-val" style="color:${getScoreColor(compositeScore)}">${compositeScore}</div><div class="comp-lbl">Structural (BPI)</div><div class="comp-wt">60% weight</div></div><div class="comp-score"><div class="comp-val" style="color:${getScoreColor(gmiScore)}">${gmiScore}</div><div class="comp-lbl">Physical (GMI)</div><div class="comp-wt">40% weight</div></div></div>`;
+  } else {
+    out+=`<div class="score-display" style="--score-col:${scoreColor};"><div class="score-label-sm">${drillName} — BIP PROFILE INDEX</div><div class="score-number" style="color:${scoreColor}">${compositeScore}</div><div class="score-classification" style="color:${scoreColor}">${getScoreLabel(compositeScore)}</div></div>`;
+    out+=`<div class="component-scores"><div class="comp-score"><div class="comp-val" style="color:${getScoreColor(Math.round(distScore))}">${Math.round(distScore)}</div><div class="comp-lbl">Distribution</div><div class="comp-wt">40% weight</div></div><div class="comp-score"><div class="comp-val" style="color:${getScoreColor(Math.round(restartScore))}">${Math.round(restartScore)}</div><div class="comp-lbl">Restart Pressure</div><div class="comp-wt">40% weight</div></div><div class="comp-score"><div class="comp-val" style="color:${getScoreColor(Math.round(densityScore))}">${Math.round(densityScore)}</div><div class="comp-lbl">BIP Density</div><div class="comp-wt">20% weight</div></div></div>`;
+  }
+  
+  // GPS Match Comparison section (if GPS data provided)
+  if (gmiResult) {
+    const c = gmiResult.components;
+    const icon = (pct) => pct >= 90 && pct <= 110 ? '✓' : pct > 110 ? '⚠' : '↓';
+    const iconCol = (pct) => pct >= 90 && pct <= 110 ? '#27AE60' : pct > 110 ? '#E67E22' : '#777';
+    out+=`<div class="card" style="margin-bottom:14px;border-left:3px solid #3498DB;"><div class="card-title">GPS Match Comparison</div>`;
+    out+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px;">`;
+    out+=`<div style="padding:8px;background:var(--panel2);border-radius:3px;"><div style="color:#777;margin-bottom:4px;">Total Dist/min</div><div style="font-weight:700;">${c.totalDist.drill} vs ${c.totalDist.match} m <span style="color:${iconCol(c.totalDist.pct)}">(${c.totalDist.pct}%) ${icon(c.totalDist.pct)}</span></div></div>`;
+    out+=`<div style="padding:8px;background:var(--panel2);border-radius:3px;"><div style="color:#777;margin-bottom:4px;">HSR/min</div><div style="font-weight:700;">${c.hsr.drill} vs ${c.hsr.match} <span style="color:${iconCol(c.hsr.pct)}">(${c.hsr.pct}%) ${icon(c.hsr.pct)}</span></div></div>`;
+    out+=`<div style="padding:8px;background:var(--panel2);border-radius:3px;"><div style="color:#777;margin-bottom:4px;">HMLD/min</div><div style="font-weight:700;">${c.hmld.drill} vs ${c.hmld.match} <span style="color:${iconCol(c.hmld.pct)}">(${c.hmld.pct}%) ${icon(c.hmld.pct)}</span></div></div>`;
+    if (c.maxVel) {
+      out+=`<div style="padding:8px;background:var(--panel2);border-radius:3px;"><div style="color:#777;margin-bottom:4px;">Max Velocity</div><div style="font-weight:700;">${c.maxVel.drill} vs ${c.maxVel.match} m/s <span style="color:${iconCol(c.maxVel.pct)}">(${c.maxVel.pct}%) ${icon(c.maxVel.pct)}</span></div></div>`;
+    }
+    out+=`<div style="padding:8px;background:var(--panel2);border-radius:3px;"><div style="color:#777;margin-bottom:4px;">Accels/min</div><div style="font-weight:700;">${c.accels.drill} vs ${c.accels.match} <span style="color:${iconCol(c.accels.pct)}">(${c.accels.pct}%) ${icon(c.accels.pct)}</span></div></div>`;
+    out+=`<div style="padding:8px;background:var(--panel2);border-radius:3px;"><div style="color:#777;margin-bottom:4px;">Decels/min</div><div style="font-weight:700;">${c.decels.drill} vs ${c.decels.match} <span style="color:${iconCol(c.decels.pct)}">(${c.decels.pct}%) ${icon(c.decels.pct)}</span></div></div>`;
+    out+=`</div></div>`;
+  }
+  
+  out+=`<div class="card" style="margin-bottom:14px;"><div class="card-title">BIP Distribution — Match vs Drill (${bench.label} · ${bench.n_games} games)</div>${compBars}<div class="legend"><div class="legend-item"><div class="legend-dot match-bar"></div>Match benchmark</div><div class="legend-item"><div class="legend-dot drill-bar"></div>This drill</div></div></div>`;
+  out+=`<div class="card" style="margin-bottom:14px;"><div class="card-title">Metrics vs Benchmark</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;font-size:12px;"><div style="padding:9px;background:var(--panel2);border-radius:3px;"><div style="color:#777;margin-bottom:3px;">BIP Density</div><div style="font-weight:700;font-size:18px;">${drillBipPct.toFixed(1)}%</div><div style="color:#777;font-size:11px;">Match: ${bench.bip_pct}%</div></div><div style="padding:9px;background:var(--panel2);border-radius:3px;"><div style="color:#777;margin-bottom:3px;">Median BOP</div><div style="font-weight:700;font-size:18px;">${medBOP}s</div><div style="color:#777;font-size:11px;">Match: ${bench.est_median_bop}s</div></div><div style="padding:9px;background:var(--panel2);border-radius:3px;"><div style="color:#777;margin-bottom:3px;">Distribution SAD</div><div style="font-weight:700;font-size:18px;">${sadSum.toFixed(1)}</div><div style="color:#777;font-size:11px;">0 = identical</div></div></div></div>`;
+  out+=`<div style="background:var(--panel2);border:1px solid var(--border);border-radius:4px;padding:14px;margin-bottom:14px;"><div style="font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--gold);margin-bottom:8px;">Prescription Classification</div><div class="presc-tags"><span class="presc-tag tag-r">RESTART: ${rm}</span><span class="presc-tag tag-s">PROFILE: ${sp}</span><span class="presc-tag tag-t">${dt}</span></div></div>`;
+  out+=`<div style="display:flex;gap:10px;"><button class="calc-btn" style="flex:1;" onclick="addToSession()">ADD TO SESSION AUDIT</button><button class="calc-btn" style="flex:0;white-space:nowrap;background:rgba(52,152,219,0.15);border:1px solid rgba(52,152,219,0.4);color:#3498DB;" onclick="saveDrillToLibrary()">SAVE TO LIBRARY</button></div>`;
+  document.getElementById('audit-results').innerHTML=out;
+}
+
+// ========== SESSION ==========
+function addToSession() {
+  if(!pendingDrill)return;
+  sessionDrills.push(Object.assign({},pendingDrill));
+  renderSession();
+  showTab('session');
+}
+function removeSessionDrill(i) { sessionDrills.splice(i,1); renderSession(); }
+
+function renderSession() {
+  const list=document.getElementById('session-drills-list');
+  if(!sessionDrills.length){list.innerHTML='<div style="padding:16px 12px;color:#777;font-size:12px;">No drills added yet. Score a drill in the Drill Audit tab.</div>';const sa=document.getElementById('session-summary-area');if(sa)sa.innerHTML='';return;}
+  list.innerHTML=sessionDrills.map((d,i)=>{
+    const sc=getScoreColor(d.score),typeCol=d.score>=60?'#27AE60':d.medBOP>45?'#3498DB':'#E67E22',typeLbl=d.type?(d.type.split('—')[0].trim()):'';
+    const hasGPS = d.gmiScore !== null && d.gmiScore !== undefined;
+    const scoreLabel = hasGPS ? `BPI:${d.score} GMI:${d.gmiScore}` : d.score;
+    return `<div class="drill-row"><div style="font-weight:500;">${d.name}${hasGPS?' ⚡':''}</div><div>${d.duration}min</div><div>${d.bipMins}min</div><div>${d.bipPct}%</div><div>${d.medBOP}s</div><div><span class="score-chip" style="background:${sc}18;color:${sc};border:1px solid ${sc}33;font-size:${hasGPS?'9px':'11px'}">${scoreLabel}</span></div><div style="font-size:10px;color:${typeCol}">${typeLbl}</div><div><button class="remove-btn" onclick="removeSessionDrill(${i})">✕</button></div></div>`;
+  }).join('');
+  const countable=sessionDrills.filter(d=>d.format==='countable');
+  if(!countable.length)return;
+  const totDur=countable.reduce((a,d)=>a+d.duration,0),totBip=countable.reduce((a,d)=>a+d.bipMins,0),sBipPct=totDur>0?(totBip/totDur*100).toFixed(1):0;
+  const avgScore=Math.round(countable.reduce((a,d)=>a+d.score,0)/countable.length),avgBOP=Math.round(countable.reduce((a,d)=>a+d.medBOP,0)/countable.length),typeB=countable.filter(d=>d.score>=60).length;
+  
+  // Calculate avg GMI if any drills have GPS data
+  const gpsDrills = countable.filter(d => d.gmiScore !== null && d.gmiScore !== undefined);
+  const avgGMI = gpsDrills.length > 0 ? Math.round(gpsDrills.reduce((a,d)=>a+d.gmiScore,0)/gpsDrills.length) : null;
+  
+  const sc=getScoreColor(avgScore);
+  const sa=document.getElementById('session-summary-area');
+  if(sa) {
+    let summaryHTML = `<div class="session-summary"><div style="text-align:center"><div style="font-weight:900;font-size:30px;color:${sc}">${avgScore}</div><div style="font-size:10px;color:#777;letter-spacing:1px;text-transform:uppercase">Avg BPI</div></div>`;
+    if (avgGMI !== null) {
+      const gmiCol = getScoreColor(avgGMI);
+      summaryHTML += `<div style="text-align:center"><div style="font-weight:900;font-size:30px;color:${gmiCol}">${avgGMI}</div><div style="font-size:10px;color:#777;letter-spacing:1px;text-transform:uppercase">Avg GMI ⚡</div></div>`;
+    }
+    summaryHTML += `<div style="text-align:center"><div style="font-weight:900;font-size:30px;color:var(--red-light)">${sBipPct}%</div><div style="font-size:10px;color:#777;letter-spacing:1px;text-transform:uppercase">Session BIP%</div></div><div style="text-align:center"><div style="font-weight:900;font-size:30px;color:var(--text)">${avgBOP}s</div><div style="font-size:10px;color:#777;letter-spacing:1px;text-transform:uppercase">Avg Med BOP</div></div><div style="text-align:center"><div style="font-weight:900;font-size:30px;color:#2ECC71">${typeB}</div><div style="font-size:10px;color:#777;letter-spacing:1px;text-transform:uppercase">Type B (≥60)</div></div></div>`;
+    sa.innerHTML = summaryHTML;
+  }
+}
+
+// ========== CALENDAR ==========
+function prevWeek(){var d=new Date(calendarRefDate);d.setDate(d.getDate()-7);calendarRefDate=d.toISOString().slice(0,10);renderCalendar();renderWeekSummary();}
+function nextWeek(){var d=new Date(calendarRefDate);d.setDate(d.getDate()+7);calendarRefDate=d.toISOString().slice(0,10);renderCalendar();renderWeekSummary();}
+function getWeekDates(ref){var d=new Date(ref||Date.now()),day=d.getDay(),mon=new Date(d),dates=[];mon.setDate(d.getDate()-(day===0?6:day-1));for(var i=0;i<7;i++){var dd=new Date(mon);dd.setDate(mon.getDate()+i);dates.push(dd.toISOString().slice(0,10));}return dates;}
+
+function saveSessionToCalendar() {
+  const rawLabel=document.getElementById('session-label').value||'Session',mdEl=document.getElementById('session-md'),mdVal=mdEl?mdEl.value:'',label=mdVal?rawLabel+' ('+mdVal+')':rawLabel,dateVal=document.getElementById('session-date').value;
+  if(!dateVal){alert('Please select a session date first.');return;}
+  const countable=sessionDrills.filter(d=>d.format==='countable');
+  if(!countable.length){alert('No BIP-countable drills in the current session.');return;}
+  const totDur=countable.reduce((s,d)=>s+d.duration,0),totBip=countable.reduce((s,d)=>s+d.bipMins,0),bipPct=totDur>0?(totBip/totDur*100).toFixed(1):0,avgBpi=Math.round(countable.reduce((s,d)=>s+d.score,0)/countable.length),avgBOP=Math.round(countable.reduce((s,d)=>s+d.medBOP,0)/countable.length),typeB=countable.filter(d=>d.score>=60).length;
+  if(!weekSessions[dateVal])weekSessions[dateVal]=[];
+  weekSessions[dateVal].push({label,drills:sessionDrills.slice(),bipPct,avgBpi,avgBOP,typeB,totDur});
+  calendarRefDate=dateVal;
+  renderCalendar();renderWeekSummary();showTab('calendar');
+  saveToStorage().catch(()=>{});
+}
+function removeCalendarSession(date,idx){if(weekSessions[date]){weekSessions[date].splice(idx,1);if(!weekSessions[date].length)delete weekSessions[date];renderCalendar();renderWeekSummary();}}
+
+function renderCalendar() {
+  const dates=getWeekDates(calendarRefDate),DAY=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],today=new Date().toISOString().slice(0,10);
+  const sd=new Date(dates[0]),ed=new Date(dates[6]),o={day:'numeric',month:'short'};
+  document.getElementById('cal-week-label').textContent=sd.toLocaleDateString('en-AU',o)+' – '+ed.toLocaleDateString('en-AU',o);
+  const grid=document.getElementById('cal-grid');
+  grid.innerHTML=dates.map((date,i)=>{
+    const sessions=weekSessions[date]||[],isToday=date===today,dayNum=new Date(date).getDate(),mon=new Date(date).toLocaleDateString('en-AU',{month:'short'});
+    const sessHtml=sessions.map((s,si)=>{
+      const bc=getScoreColor(s.avgBpi),bipC=parseFloat(s.bipPct)>=60?'#27AE60':parseFloat(s.bipPct)>=50?'#C8A951':'#777';
+      return `<div style="background:var(--panel);border:1px solid var(--border);border-radius:3px;padding:6px 8px;margin-bottom:4px;font-size:11px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;"><span style="font-weight:600;">${s.label}</span><button onclick="removeCalendarSession('${date}',${si})" style="background:none;border:none;color:#444;cursor:pointer;font-size:10px;">✕</button></div><div style="display:flex;gap:6px;flex-wrap:wrap;"><span style="color:${bc};font-weight:700;">BPI ${s.avgBpi}</span><span style="color:${bipC};">BIP ${s.bipPct}%</span><span style="color:#777;">BOP ${s.avgBOP}s</span>${s.typeB>0?'<span style="color:#2ECC71;">B×'+s.typeB+'</span>':''}</div></div>`;
+    }).join('');
+    return `<div style="background:${isToday?'rgba(196,18,48,0.06)':'var(--panel2)'};border:1px solid ${isToday?'rgba(196,18,48,0.3)':'var(--border)'};border-radius:4px;padding:10px;min-height:120px;"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;"><span style="font-weight:700;font-size:13px;color:${isToday?'var(--red-light)':'var(--text)'};">${DAY[i]} ${dayNum} ${mon}</span></div>${sessHtml}${!sessions.length?'<div style="font-size:10px;color:#2A2A2A;margin-top:8px;">No sessions</div>':''}</div>`;
+  }).join('');
+}
+function renderWeekSummary() {
+  const dates=getWeekDates(calendarRefDate),allSess=dates.reduce((a,d)=>a.concat(weekSessions[d]||[]),[]),el=document.getElementById('week-summary');
+  if(!allSess.length){el.innerHTML='<div style="color:#777;font-size:12px;padding:12px 0;">No sessions this week.</div>';return;}
+  const allDrills=allSess.reduce((a,s)=>a.concat(s.drills.filter(d=>d.format==='countable')),[]),avgBpi=allDrills.length?Math.round(allDrills.reduce((a,d)=>a+d.score,0)/allDrills.length):0,avgBipPct=(allSess.reduce((a,s)=>a+parseFloat(s.bipPct),0)/allSess.length).toFixed(1),typeB=allSess.reduce((a,s)=>a+s.typeB,0),sc=getScoreColor(avgBpi);
+  el.innerHTML=`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:14px;background:var(--panel2);border:1px solid var(--border);border-radius:4px;"><div style="text-align:center"><div style="font-weight:900;font-size:26px;color:${sc}">${avgBpi}</div><div style="font-size:10px;color:#777;letter-spacing:1px;text-transform:uppercase">Week Avg BPI</div></div><div style="text-align:center"><div style="font-weight:900;font-size:26px;color:var(--red-light)">${avgBipPct}%</div><div style="font-size:10px;color:#777;letter-spacing:1px;text-transform:uppercase">Avg Session BIP%</div></div><div style="text-align:center"><div style="font-weight:900;font-size:26px;color:var(--text)">${allSess.length}</div><div style="font-size:10px;color:#777;letter-spacing:1px;text-transform:uppercase">Sessions Logged</div></div><div style="text-align:center"><div style="font-weight:900;font-size:26px;color:#2ECC71">${typeB}</div><div style="font-size:10px;color:#777;letter-spacing:1px;text-transform:uppercase">Type B Drills</div></div></div>`;
+}
+
+// ========== DRILL LIBRARY ==========
+function loadLibrary(){try{const raw=storage&&storage.get?null:null;}catch(e){}}
+function saveDrillToLibrary(){
+  if(!pendingDrill){alert('Score a drill in the Drill Audit tab first.');return;}
+  const d=pendingDrill;
+  const existIdx=drillLibrary.findIndex(x=>x.name.toLowerCase()===d.name.toLowerCase());
+  if(existIdx>=0){if(!confirm('"'+d.name+'" already in library. Replace?'))return;drillLibrary[existIdx]=Object.assign({},d,{savedAt:new Date().toISOString()});}
+  else drillLibrary.push(Object.assign({},d,{savedAt:new Date().toISOString()}));
+  saveLibrary();renderDrillLibrary();showToast('Saved to Drill Library ✓');
+}
+function loadDrillFromLibrary(idx){
+  const d=drillLibrary[idx];if(!d)return;
+  document.getElementById('drill-name').value=d.name;
+  document.getElementById('drill-duration').value=d.duration;
+  document.getElementById('drill-bip').value=d.bipMins;
+  document.getElementById('drill-median-bop').value=d.medBOP;
+  if(d.binCounts)d.binCounts.forEach((v,i)=>{const el=document.getElementById('b'+i);if(el)el.value=v>0?v:'';});
+  showTab('audit');showToast('Loaded "'+d.name+'" – adjust and re-score');
+}
+function removeDrillFromLibrary(idx){if(!confirm('Remove "'+drillLibrary[idx].name+'"?'))return;drillLibrary.splice(idx,1);saveLibrary();renderDrillLibrary();}
+function renderDrillLibrary(){
+  const el=document.getElementById('drill-library-list');if(!el)return;
+  if(!drillLibrary.length){el.innerHTML='<div style="padding:32px;text-align:center;color:#555;font-size:13px;">No drills saved yet. Score a drill in the Drill Audit tab, then click <strong style="color:#E8E8E8">Save to Library</strong>.</div>';return;}
+  const sorted=drillLibrary.slice().sort((a,b)=>b.score-a.score);
+  el.innerHTML=sorted.map(d=>{
+    const ri=drillLibrary.indexOf(d),sc=getScoreColor(d.score),typeCol=d.score>=60?'#27AE60':d.medBOP>45?'#3498DB':'#E67E22',typeLbl=d.type?(d.type.split('—')[0].trim()):'',savedDate=d.savedAt?new Date(d.savedAt).toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'2-digit'}):'';
+    return `<div style="display:grid;grid-template-columns:1fr 60px 60px 60px 60px 80px 90px auto;gap:0;align-items:center;padding:10px 12px;border-bottom:1px solid #1A1A1A;" onmouseover="this.style.background='#1E1E1E'" onmouseout="this.style.background='transparent'"><div style="font-weight:600;font-size:13px;">${d.name}<div style="font-size:10px;color:#555;margin-top:2px;">${savedDate}</div></div><div style="text-align:center;font-size:12px;color:#777;">${d.duration}min</div><div style="text-align:center;font-size:12px;color:#777;">${d.bipPct}%</div><div style="text-align:center;font-size:12px;color:#777;">${d.medBOP}s</div><div style="text-align:center;"><span style="font-weight:900;font-size:18px;color:${sc};">${d.score}</span></div><div style="text-align:center;font-size:10px;color:${typeCol};">${typeLbl}</div><div style="display:flex;gap:4px;justify-content:flex-end;"><button onclick="loadDrillFromLibrary(${ri})" style="padding:4px 8px;font-size:10px;font-weight:700;background:rgba(52,152,219,0.15);border:1px solid rgba(52,152,219,0.3);color:#3498DB;cursor:pointer;border-radius:2px;">LOAD</button><button onclick="removeDrillFromLibrary(${ri})" style="padding:4px 8px;font-size:10px;background:none;border:1px solid #333;color:#555;cursor:pointer;border-radius:2px;">✕</button></div></div>`;
+  }).join('');
+  const cnt=document.getElementById('library-count');
+  if(cnt)cnt.textContent=drillLibrary.length+' drill'+(drillLibrary.length!==1?'s':'');
+}
+function filterLibrary(){
+  const q=(document.getElementById('library-search')||{}).value||'',typeF=(document.getElementById('library-type-filter')||{}).value||'',el=document.getElementById('drill-library-list');
+  if(!el)return;
+  const filtered=drillLibrary.filter(d=>(!q||d.name.toLowerCase().indexOf(q.toLowerCase())>=0)&&(!typeF||(d.type&&d.type.indexOf(typeF)>=0)));
+  if(!filtered.length){el.innerHTML='<div style="padding:24px;text-align:center;color:#555;font-size:13px;">No drills match filter.</div>';return;}
+  renderDrillLibrary();
+}
+
+// ========== CSV EXPORT ==========
+function exportSessionCSV(){const countable=sessionDrills.filter(d=>d.format==='countable');if(!countable.length){alert('No countable drills.');return;}const label=(document.getElementById('session-label')||{value:''}).value||'Session',dateVal=(document.getElementById('session-date')||{value:''}).value||new Date().toISOString().slice(0,10),rows=[['Date','Session_Label','Drill_Name','Duration_min','BIP_Time_min','BIP_Pct','Med_BOP_sec','BPI_Score','Drill_Type']];countable.forEach(d=>rows.push([dateVal,label,d.name,d.duration,d.bipMins,d.bipPct,d.medBOP,d.score,(d.type||'').replace(/,/g,' ')]));downloadCSV(rows,'WSW_Session_'+dateVal+'.csv');}
+function exportWeekCSV(){const dates=getWeekDates(calendarRefDate),allRows=[['Date','Session_Label','Drill_Name','Duration_min','BIP_Time_min','BIP_Pct','Med_BOP_sec','BPI_Score','Drill_Type']];dates.forEach(date=>{(weekSessions[date]||[]).forEach(s=>{s.drills.filter(d=>d.format==='countable').forEach(d=>allRows.push([date,s.label,d.name,d.duration,d.bipMins,d.bipPct,d.medBOP,d.score,(d.type||'').replace(/,/g,' ')]));});});if(allRows.length<=1){alert('No sessions this week.');return;}downloadCSV(allRows,'WSW_Week.csv');}
+function exportLibraryCSV(){if(!drillLibrary.length){alert('Drill library is empty.');return;}const rows=[['Drill_Name','Saved_Date','Duration_min','BIP_Time_min','BIP_Pct','Med_BOP_sec','BPI_Score','Drill_Type']];drillLibrary.forEach(d=>rows.push([d.name,d.savedAt?new Date(d.savedAt).toLocaleDateString('en-AU'):'',d.duration,d.bipMins,d.bipPct,d.medBOP,d.score,(d.type||'').replace(/,/g,' ')]));downloadCSV(rows,'WSW_DrillLibrary.csv');}
+function downloadCSV(rows,filename){const csv=rows.map(r=>r.map(v=>{var s=String(v===null||v===undefined?'':v);if(s.indexOf(',')>=0||s.indexOf('"')>=0||s.indexOf('\n')>=0)s='"'+s.replace(/"/g,'""')+'"';return s;}).join(',')).join('\r\n');const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;a.style.display='none';document.body.appendChild(a);a.click();setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},200);}
+
+// ========== PDF DRILL IMPORT ==========
+function importDrillPDF(input) {
+  const file=input.files[0];if(!file)return;
+  const statusEl=document.getElementById('pdf-drill-status'),resultsEl=document.getElementById('pdf-drill-results'),listEl=document.getElementById('pdf-drill-list');
+  statusEl.textContent='Reading PDF…';resultsEl.style.display='none';
+  if(!window.pdfjsLib){statusEl.textContent='PDF library not loaded.';return;}
+  window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const typedArr=new Uint8Array(e.target.result);
+    pdfjsLib.getDocument({data:typedArr}).promise.then(pdfDoc=>{
+      const pageTexts=[],pagePromises=[];
+      for(let p=1;p<=pdfDoc.numPages;p++){pagePromises.push(pdfDoc.getPage(p).then(page=>page.getTextContent().then(content=>{const items=content.items.map(item=>({text:item.str,x:Math.round(item.transform[4]),y:Math.round(item.transform[5])}));pageTexts.push(items);})));}
+      return Promise.all(pagePromises).then(()=>parseDrillPDF(pageTexts,statusEl,resultsEl,listEl));
+    }).catch(err=>{statusEl.textContent='Error: '+err.message;});
+  };
+  reader.readAsArrayBuffer(file);
+  input.value='';
+}
+
+function parseDrillPDF(pageTexts,statusEl,resultsEl,listEl) {
+  function mmssToSecs(s){if(!s)return 0;s=s.trim();const p=s.split(':');if(p.length===2)return parseInt(p[0])*60+parseInt(p[1]);if(p.length===3)return parseInt(p[0])*3600+parseInt(p[1])*60+parseInt(p[2]);return 0;}
+  function getBin(secs){const R=[[0,15],[15,30],[30,60],[60,90],[90,120],[120,150],[150,200],[200,99999]];for(let i=0;i<R.length;i++)if(secs>=R[i][0]&&secs<R[i][1])return i;return 7;}
+  function med(arr){if(!arr.length)return 0;const s=arr.slice().sort((a,b)=>a-b),m=Math.floor(s.length/2);return s.length%2?s[m]:(s[m-1]+s[m])/2;}
+  function isMMSS(s){return /^\d{1,2}:\d{2}$/.test((s||'').trim());}
+  function toLines(items){const lines=[];items.forEach(item=>{for(let i=0;i<lines.length;i++){if(Math.abs(lines[i].y-item.y)<=3){lines[i].tokens.push(item);return;}}lines.push({y:item.y,tokens:[item]});});return lines.sort((a,b)=>b.y-a.y);}
+  function extractText(page){return page.map(t=>t.text).join(' ');}
+
+  // Detect PDF type: STATSports training report or Sportscode MCP
+  const fullText = pageTexts.map(extractText).join(' ');
+  const isSTATSports = fullText.indexOf('BALL IN PLAY REPORT') >= 0 || fullText.indexOf('BALL ROLLING') >= 0;
+
+  if (isSTATSports) {
+    // STATSports Training GPS Report Parser
+    const results = [];
+    const SKIP = ['Warm Up','WarmUp','Total','TOTAL','AVERAGES','Skills'];
+    
+    // Find the summary page (contains "BALL IN PLAY REPORT")
+    let summaryPageIdx = -1;
+    for (let i = 0; i < pageTexts.length; i++) {
+      if (extractText(pageTexts[i]).indexOf('BALL IN PLAY REPORT') >= 0) {
+        summaryPageIdx = i;
+        break;
+      }
+    }
+    
+    if (summaryPageIdx < 0) {
+      statusEl.textContent = 'STATSports format detected but no drill summary found.';
+      return;
+    }
+    
+    // Parse summary table (drill totals with GPS data)
+    const summaryLines = toLines(pageTexts[summaryPageIdx]);
+    summaryLines.forEach(line => {
+      const tokens = line.tokens.slice().sort((a,b) => a.x - b.x);
+      const texts = tokens.map(t => t.text.trim()).filter(Boolean);
+      
+      // Look for rows with AM/PM timestamps
+      if (!texts.some(t => /[AP]M$/.test(t))) return;
+      
+      // Extract drill name (before first AM/PM)
+      const nameTokens = [];
+      for (let i = 0; i < texts.length; i++) {
+        if (/[AP]M$/.test(texts[i])) break;
+        if (!/^\d+$/.test(texts[i])) nameTokens.push(texts[i]);
+      }
+      const drillName = nameTokens.join(' ').trim();
+      if (!drillName || SKIP.some(s => drillName.indexOf(s) >= 0)) return;
+      
+      // Extract times (format: HH:MM or H:MM:SS)
+      const mmssVals = texts.filter(isMMSS);
+      if (mmssVals.length < 2) return;
+      
+      const totalTimeMins = mmssToSecs(mmssVals[0]) / 60;
+      const bipTimeMins = mmssToSecs(mmssVals[1]) / 60;
+      
+      // Extract GPS metrics (remaining numeric values after times)
+      const numericVals = [];
+      let foundTimes = 0;
+      for (let i = 0; i < texts.length; i++) {
+        if (isMMSS(texts[i])) {
+          foundTimes++;
+          if (foundTimes >= 2) continue; // Skip past first 2 time values
+        }
+        const val = parseFloat(texts[i]);
+        if (!isNaN(val) && foundTimes >= 2) numericVals.push(val);
+      }
+      
+      // STATSports column order: Total Dist, Dist/min, HSR, HSR/min, vHSR, vHSR/min, HMLD, HMLD/min, Accels, Accels/min, Decels
+      const gps = {};
+      if (numericVals.length >= 11) {
+        gps.totalDist = Math.round(numericVals[0]);
+        gps.hsr = Math.round(numericVals[2]);
+        gps.vHSR = Math.round(numericVals[4]);
+        gps.hmld = parseFloat(numericVals[6].toFixed(1));
+        gps.accels = Math.round(numericVals[8]);
+        gps.decels = Math.round(numericVals[10]);
+        gps.maxVel = null; // Not in summary table
+      }
+      
+      results.push({
+        name: drillName,
+        totalMins: parseFloat(totalTimeMins.toFixed(1)),
+        bipMins: parseFloat(bipTimeMins.toFixed(1)),
+        medBOPsecs: 0, // Will calculate from rep data
+        repCount: 0,
+        binCounts: [0,0,0,0,0,0,0,0],
+        gps: gps
+      });
+    });
+    
+    // Parse rep-level data from "Drills" page (Page 2) if available
+    let repsPageIdx = -1;
+    for (let i = 0; i < pageTexts.length; i++) {
+      const txt = extractText(pageTexts[i]);
+      if (txt.indexOf('Drill Duration') >= 0 && txt.indexOf('Ball Out Of Play Duration') >= 0) {
+        repsPageIdx = i;
+        break;
+      }
+    }
+    
+    if (repsPageIdx >= 0) {
+      const repsData = {};
+      const repsLines = toLines(pageTexts[repsPageIdx]);
+      
+      repsLines.forEach(line => {
+        const tokens = line.tokens.slice().sort((a,b) => a.x - b.x);
+        const texts = tokens.map(t => t.text.trim()).filter(Boolean);
+        
+        // Look for rows with drill name and two MM:SS values (BIP duration and BOP duration)
+        const mmssVals = texts.filter(isMMSS);
+        if (mmssVals.length < 2) return;
+        
+        // Extract rep name (tokens before first MM:SS)
+        const nameTokens = [];
+        for (let i = 0; i < texts.length; i++) {
+          if (isMMSS(texts[i])) break;
+          nameTokens.push(texts[i]);
+        }
+        const repName = nameTokens.join(' ').trim();
+        if (!repName || repName.length < 3) return;
+        
+        const bipSecs = mmssToSecs(mmssVals[0]);
+        const bopSecs = mmssToSecs(mmssVals[mmssVals.length - 1]);
+        
+        // Canonicalize drill name (remove rep numbers like "- 1.1")
+        const canonical = repName.replace(/\s*-\s*\d+(\.\d+)?\s*$/, '').trim();
+        
+        if (!repsData[canonical]) {
+          repsData[canonical] = {binCounts: [0,0,0,0,0,0,0,0], bops: [], bipSecs: []};
+        }
+        
+        repsData[canonical].binCounts[getBin(bipSecs)]++;
+        repsData[canonical].bipSecs.push(bipSecs);
+        if (bopSecs > 0 && bopSecs < 600) repsData[canonical].bops.push(bopSecs);
+      });
+      
+      // Match reps data to drill summaries
+      results.forEach(drill => {
+        let matchKey = null, bestScore = 0;
+        Object.keys(repsData).forEach(k => {
+          const n1 = drill.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+          const n2 = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+          let score = 0;
+          if (n2.indexOf(n1) >= 0 || n1.indexOf(n2) >= 0) {
+            score = Math.min(n1.length, n2.length);
+          }
+          if (score > bestScore) {
+            bestScore = score;
+            matchKey = k;
+          }
+        });
+        
+        if (matchKey && repsData[matchKey]) {
+          drill.binCounts = repsData[matchKey].binCounts;
+          drill.medBOPsecs = Math.round(med(repsData[matchKey].bops));
+          drill.repCount = repsData[matchKey].bipSecs.length;
+        }
+      });
+    }
+    
+    if (!results.length) {
+      statusEl.textContent = 'No drills found in STATSports report.';
+      return;
+    }
+    
+    statusEl.textContent = results.length + ' drill' + (results.length !== 1 ? 's' : '') + ' found (STATSports format)';
+    
+    listEl.innerHTML = results.map((d, i) => {
+      const bipPct = d.totalMins > 0 ? Math.round((d.bipMins / d.totalMins) * 100) : 0;
+      const binSummary = ['0-15s','15-30s','30-60s','60-90s','90-120s','120-150s','150-200s','200+s']
+        .map((lbl, bi) => d.binCounts[bi] > 0 ? d.binCounts[bi] + '× ' + lbl : null)
+        .filter(Boolean).join(', ');
+      const gpsInfo = d.gps && d.gps.totalDist ? 
+        `<div style="font-size:10px;color:#888;margin-top:3px;">GPS: ${d.gps.totalDist}m dist, ${d.gps.hsr}m HSR, ${d.gps.hmld} HMLD, ${d.gps.accels}/${d.gps.decels} A/D</div>` : '';
+      return `<div style="padding:10px 12px;background:var(--panel2);border:1px solid var(--border);border-radius:3px;cursor:pointer;transition:border-color 0.15s;" onclick="loadPDFDrill(${i})" onmouseover="this.style.borderColor='rgba(52,152,219,0.5)'" onmouseout="this.style.borderColor='var(--border)'">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="flex:1;">
+            <div style="font-weight:600;font-size:13px;">${d.name}</div>
+            <div style="font-size:11px;color:#777;margin-top:3px;">${d.repCount} rep${d.repCount !== 1 ? 's' : ''} · ${d.totalMins}min · BIP ${d.bipMins}min (${bipPct}%)${d.medBOPsecs ? ' · Med BOP ' + d.medBOPsecs + 's' : ''}</div>
+            ${binSummary ? '<div style="font-size:10px;color:#555;margin-top:3px;">Bins: ' + binSummary + '</div>' : ''}
+            ${gpsInfo}
+          </div>
+          <div style="font-size:10px;letter-spacing:1px;color:#3498DB;font-weight:700;flex-shrink:0;">LOAD →</div>
+        </div>
+      </div>`;
+    }).join('');
+    
+    window._pdfDrillResults = results;
+    
+    // Add to persistent training drills (keep last 160 drills)
+    const sessionData = {
+      date: new Date().toISOString().slice(0, 10),
+      drills: results,
+      source: 'STATSports'
+    };
+    trainingDrills.unshift(sessionData);
+    if (trainingDrills.length > 160) trainingDrills = trainingDrills.slice(0, 160);
+    
+    // Save to localStorage
+    try {
+      localStorage.setItem(TRAINING_DRILLS_KEY, JSON.stringify(trainingDrills));
+    } catch (e) {
+      console.warn('Failed to save training drills:', e);
+    }
+    
+    resultsEl.style.display = 'block';
+    
+  } else {
+    // Original Sportscode MCP parser
+    const repData={};
+    if(pageTexts.length>0){
+      const lines1=toLines(pageTexts[0]);
+      let headerY=-1;
+      lines1.forEach(line=>{const texts=line.tokens.map(t=>t.text.trim()).filter(Boolean);if(texts.indexOf('Drills')>=0)headerY=line.y;});
+      lines1.forEach(line=>{
+        if(headerY>0&&line.y>=headerY)return;
+        const tokens=line.tokens.slice().sort((a,b)=>a.x-b.x),texts=tokens.map(t=>t.text.trim()).filter(Boolean);
+        if(texts.length<3)return;
+        const mmssVals=texts.filter(isMMSS);if(mmssVals.length<2)return;
+        const nameTokens=[];let hitFirst=false;
+        texts.forEach(t=>{if(!hitFirst&&isMMSS(t)){hitFirst=true;return;}if(!hitFirst&&isNaN(parseFloat(t)))nameTokens.push(t);});
+        const repName=nameTokens.join(' ').trim();if(!repName||repName.length<3)return;
+        const bipSecs=mmssToSecs(mmssVals[0]),bopSecs=mmssToSecs(mmssVals[mmssVals.length-1]);if(!bipSecs)return;
+        const canonical=repName.replace(/\s*-\s*\d+(\.\d+)?\s*$/,'').trim();
+        if(!repData[canonical])repData[canonical]={binCounts:[0,0,0,0,0,0,0,0],bops:[],bipSecs:[]};
+        repData[canonical].binCounts[getBin(bipSecs)]++;
+        repData[canonical].bipSecs.push(bipSecs);
+        if(bopSecs>0&&bopSecs<600)repData[canonical].bops.push(bopSecs);
+      });
+    }
+
+    const drillTotals={},SKIP=['Warm Up','WarmUp','Total','TOTAL','Skills','skills','BIP','#DIV'];
+    if(pageTexts.length>1){
+      const lines2=toLines(pageTexts[1]);
+      lines2.forEach(line=>{
+        const tokens=line.tokens.slice().sort((a,b)=>a.x-b.x),texts=tokens.map(t=>t.text.trim()).filter(Boolean);
+        if(!texts.some(t=>/[AP]M$/.test(t)))return;
+        const mmssVals=texts.filter(isMMSS);if(mmssVals.length<2)return;
+        const nameTokens=[];let pastName=false;
+        texts.forEach(t=>{if(/[AP]M$/.test(t)){pastName=true;return;}if(!pastName&&!/^\d+$/.test(t))nameTokens.push(t);});
+        const drillName=nameTokens.join(' ').trim();
+        if(!drillName||SKIP.some(s=>drillName.indexOf(s)>=0))return;
+        const totalSecs=mmssToSecs(mmssVals[0]),bipSecs=mmssToSecs(mmssVals[1]);
+        if(!totalSecs||!bipSecs)return;
+        drillTotals[drillName]={totalSecs,bipSecs,gps:{}};
+      });
+    }
+
+    const results=[];
+    Object.keys(drillTotals).forEach(name=>{
+      const tot=drillTotals[name];
+      let matchKey=null,bestScore=0;
+      Object.keys(repData).forEach(k=>{const n1=name.toLowerCase().replace(/[^a-z0-9]/g,''),n2=k.toLowerCase().replace(/[^a-z0-9]/g,'');let score=0;if(n2.indexOf(n1)>=0||n1.indexOf(n2)>=0)score=Math.min(n1.length,n2.length);if(score>bestScore){bestScore=score;matchKey=k;}});
+      let binCounts=[0,0,0,0,0,0,0,0],medBOPsecs=0,repCount=0;
+      if(matchKey&&repData[matchKey]){binCounts=repData[matchKey].binCounts;medBOPsecs=Math.round(med(repData[matchKey].bops));repCount=repData[matchKey].bipSecs.length;}
+      results.push({name,totalMins:parseFloat((tot.totalSecs/60).toFixed(1)),bipMins:parseFloat((tot.bipSecs/60).toFixed(1)),medBOPsecs,repCount,binCounts,gps:tot.gps||{}});
+    });
+
+    if(!results.length){statusEl.textContent='No drills found. Confirm this is a valid drill PDF.';return;}
+    statusEl.textContent=results.length+' drill group'+(results.length!==1?'s':'')+' found (Sportscode format)';
+
+    listEl.innerHTML=results.map((d,i)=>{
+      const bipPct=d.totalMins>0?Math.round((d.bipMins/d.totalMins)*100):0;
+      const binSummary=['0-15s','15-30s','30-60s','60-90s','90-120s','120-150s','150-200s','200+s'].map((lbl,bi)=>d.binCounts[bi]>0?d.binCounts[bi]+'× '+lbl:null).filter(Boolean).join(', ');
+      return `<div style="padding:10px 12px;background:var(--panel2);border:1px solid var(--border);border-radius:3px;cursor:pointer;transition:border-color 0.15s;" onclick="loadPDFDrill(${i})" onmouseover="this.style.borderColor='rgba(52,152,219,0.5)'" onmouseout="this.style.borderColor='var(--border)'"><div style="display:flex;align-items:center;gap:10px;"><div style="flex:1;"><div style="font-weight:600;font-size:13px;">${d.name}</div><div style="font-size:11px;color:#777;margin-top:3px;">${d.repCount} rep${d.repCount!==1?'s':''} · ${d.totalMins}min · BIP ${d.bipMins}min (${bipPct}%)${d.medBOPsecs?' · Med BOP '+d.medBOPsecs+'s':''}</div>${binSummary?'<div style="font-size:10px;color:#555;margin-top:3px;">Bins: '+binSummary+'</div>':''}</div><div style="font-size:10px;letter-spacing:1px;color:#3498DB;font-weight:700;flex-shrink:0;">LOAD →</div></div></div>`;
+    }).join('');
+    window._pdfDrillResults=results;
+    
+    // Add to persistent training drills (keep last 160 drills)
+    const sessionData = {
+      date: new Date().toISOString().slice(0, 10),
+      drills: results,
+      source: 'Sportscode'
+    };
+    trainingDrills.unshift(sessionData);
+    if (trainingDrills.length > 160) trainingDrills = trainingDrills.slice(0, 160);
+    
+    // Save to localStorage
+    try {
+      localStorage.setItem(TRAINING_DRILLS_KEY, JSON.stringify(trainingDrills));
+    } catch (e) {
+      console.warn('Failed to save training drills:', e);
+    }
+    
+    resultsEl.style.display='block';
+  }
+}
+
+function loadPDFDrill(idx) {
+  const d=window._pdfDrillResults[idx];if(!d)return;
+  document.getElementById('drill-name').value=d.name;
+  document.getElementById('drill-duration').value=d.totalMins;
+  document.getElementById('drill-bip').value=d.bipMins;
+  if(d.medBOPsecs>0)document.getElementById('drill-median-bop').value=d.medBOPsecs;
+  if(d.binCounts&&d.binCounts.length===8)d.binCounts.forEach((count,i)=>{const el=document.getElementById('b'+i);if(el)el.value=count>0?count:'';});
+  
+  // Auto-populate GPS fields if available (STATSports data)
+  if(d.gps && Object.keys(d.gps).length > 0) {
+    if(d.gps.totalDist) document.getElementById('drill-totaldist').value = d.gps.totalDist;
+    if(d.gps.hsr) document.getElementById('drill-hsr').value = d.gps.hsr;
+    if(d.gps.hmld) document.getElementById('drill-hmld').value = d.gps.hmld;
+    if(d.gps.maxVel) document.getElementById('drill-maxvel').value = d.gps.maxVel;
+    if(d.gps.accels) document.getElementById('drill-accels').value = d.gps.accels;
+    if(d.gps.decels) document.getElementById('drill-decels').value = d.gps.decels;
+    
+    // Show GPS section and enable GMI calculation
+    document.getElementById('gps-inputs-section').style.display = 'block';
+    document.getElementById('gps-toggle').checked = true;
+  }
+  
+  window._pendingGPS=d.gps||{};
+  document.getElementById('pdf-drill-status').textContent='Loaded "'+d.name+'" – '+d.repCount+' reps. Review then click Calculate.';
+  showToast('Loaded "'+d.name+'" – all fields pre-filled');
+}
+
+// ========== GPS REPORT READER ==========
+function handleGPSDrop(event) {
+  event.preventDefault();
+  document.getElementById('gps-drop-zone').classList.remove('drag-over');
+  const file=event.dataTransfer.files[0];
+  if(file&&file.type==='application/pdf')processGPSPDF(file);
+}
+function handleGPSUpload(input) {
+  const file=input.files[0];if(file)processGPSPDF(file);
+  input.value='';
+}
+
+function processGPSPDF(file) {
+  const status=document.getElementById('gps-status');
+  status.textContent='Reading PDF…';
+  document.getElementById('gps-stats-panel').style.display='none';
+  if(!window.pdfjsLib){status.textContent='PDF library not loaded.';return;}
+  window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const typedArr=new Uint8Array(e.target.result);
+    pdfjsLib.getDocument({data:typedArr}).promise.then(async pdfDoc=>{
+      status.textContent='Extracting text from '+pdfDoc.numPages+' page(s)…';
+      let fullText='';
+      for(let p=1;p<=pdfDoc.numPages;p++){
+        const page=await pdfDoc.getPage(p);
+        const content=await page.getTextContent();
+        // Sort items top-to-bottom, left-to-right for readable output
+        const items=content.items.slice().sort((a,b)=>b.transform[5]-a.transform[5]||a.transform[4]-b.transform[4]);
+        let lastY=null,lineText='';
+        items.forEach(item=>{
+          const y=Math.round(item.transform[5]);
+          if(lastY!==null&&Math.abs(y-lastY)>5){fullText+=lineText.trim()+'\n';lineText='';}
+          lineText+=item.str+' ';lastY=y;
+        });
+        if(lineText.trim())fullText+=lineText.trim()+'\n';
+        fullText+='\n--- Page '+p+' end ---\n\n';
+      }
+      gpsExtractedText=fullText;
+    status.textContent='✓ Extracted '+(fullText.length>500?Math.round(fullText.length/1000)+'k':'')+ ' chars from '+pdfDoc.numPages+' pages.';
+      renderGPSStats(fullText,file.name);
+      document.getElementById('gps-stats-panel').style.display='block';
+    }).catch(err=>{status.textContent='Error reading PDF: '+err.message;});
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function renderGPSStats(text, filename) {
+  const statGrid=document.getElementById('gps-stat-grid');
+  const playerTable=document.getElementById('gps-player-table');
+  
+  // Extract match header info (1st Half, 2nd Half, Game durations)
+  const h1Match = text.match(/1st\s+Half[:\s]+(\d{1,2}:\d{2}(?::\d{2})?)/i);
+  const h2Match = text.match(/2nd\s+Half[:\s]+(\d{1,2}:\d{2}(?::\d{2})?)/i);
+  const gameMatch = text.match(/Game[:\s]+(\d{1,2}:\d{2}(?::\d{2})?)/i);
+  
+ // STATSports extraction: "Game Averages  9732   587  102  1991.0  48   122  190"
+  // Order: Dist, HSR, vHSR, HMLD, HMLD/min, Accels, Decels
+  const gameAvgPattern = /Game\s+Averages?\s+(\d{4,5})\s+(\d{2,4})\s+(\d{1,3})\s+([\d.]+)\s+(\d{1,3})\s+(\d{2,4})\s+(\d{2,4})/i;
+  const gameAvgMatch = text.match(gameAvgPattern);
+  
+  let totalDist = '—', totalHSR = '—', totalvHSR = '—', totalHMLD = '—', totalHMLDmin = '—';
+  let totalAccels = '—', totalDecels = '—', maxVelocity = '—';
+  
+  if (gameAvgMatch) {
+    totalDist = gameAvgMatch[1];
+    totalHSR = gameAvgMatch[2];
+    totalvHSR = gameAvgMatch[3];
+    totalHMLD = gameAvgMatch[4];
+    totalHMLDmin = gameAvgMatch[5];
+    totalAccels = gameAvgMatch[6];
+    totalDecels = gameAvgMatch[7];
+  }
+  
+  // Extract max velocity from STARTING XI only (team average)
+  const startingXISection = text.split(/SUBSTITUTES/i)[0];
+  const starterVels = [];
+  const velPattern = /\d+%\s+\d+\s+\d+\s+\d+\s+([\d.]+)\s+[\d.]+\s+[\d.]+%/g;
+  let velMatch;
+  while ((velMatch = velPattern.exec(startingXISection)) !== null) {
+    const vel = parseFloat(velMatch[1]);
+    if (!isNaN(vel) && vel > 5 && vel < 15) starterVels.push(vel);
+  }
+  if (starterVels.length > 0) {
+    const avgVel = starterVels.reduce((a,b) => a+b, 0) / starterVels.length;
+    maxVelocity = avgVel.toFixed(2);
+  }
+  
+  // Display summary stats
+  const stats = [
+    {label: 'Match Duration', val: gameMatch ? gameMatch[1] : '—'},
+    {label: 'Total Distance', val: totalDist},
+    {label: 'HSR Distance', val: totalHSR},
+    {label: 'vHSR Distance', val: totalvHSR},
+    {label: 'Max Velocity', val: maxVelocity},
+    {label: 'HMLD', val: totalHMLD},
+    {label: 'HMLD/MIN', val: totalHMLDmin},
+    {label: 'Intense Accels', val: totalAccels},
+    {label: 'Intense Decels', val: totalDecels},
+  ];
+  
+  statGrid.innerHTML = stats.map(s => 
+    `<div class="gps-stat-cell"><div class="gps-stat-val">${s.val}</div><div class="gps-stat-lbl">${s.label}</div></div>`
+  ).join('');
+  
+  // Extract player table - look for STARTING XI section
+  const lines = text.split('\n');
+  const playerRows = [];
+  let inPlayerSection = false;
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    
+    // Detect start of player table
+    if (/STARTING\s+XI|Player\s+Name.*Game\s*%/i.test(line)) {
+      inPlayerSection = true;
+      continue;
+    }
+    
+    // Detect end of player section
+    if (inPlayerSection && (/SUBSTITUTES|HALF\s+COMPARISON|1st\s+Half.*2nd\s+Half/i.test(line) || line.trim() === '')) {
+      if (/SUBSTITUTES/i.test(line)) {
+        // Continue into substitutes section
+        continue;
+      } else {
+        break;
+      }
+    }
+    
+    // Extract player rows (must have player name followed by numbers)
+    if (inPlayerSection) {
+      // Match pattern: Name (letters) followed by percentage and numbers
+      const playerMatch = line.match(/^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s+(\d+%)\s+(\d+)\s+(\d+)\s+(\d+)/);
+      if (playerMatch) {
+        const [, name, gamePct, dist, hsr, vhsr] = playerMatch;
+        // Extract remaining numbers from line
+        const nums = line.replace(name, '').trim().split(/\s+/).filter(s => /^[\d.%]+$/.test(s));
+        
+        // Handle missing columns by position (Sattout case: missing km/h value)
+        // Expected order: gamePct, dist, hsr, vhsr, maxVel(m/s), maxVel(km/h), maxVel%, HMLD, HMLD/min, Accels, Decels
+        if (nums.length >= 9) {
+          // If we have <11 values, check if maxVel km/h is missing (value around 25-35 after m/s value 7-10)
+          let adjusted = [...nums];
+          if (nums.length === 10) {
+            // Missing one value - likely km/h
+            // Insert placeholder after m/s value (index 4)
+            adjusted.splice(5, 0, '—');
+          }
+          
+          playerRows.push({
+            name,
+            gamePct: adjusted[0],
+            dist: adjusted[1],
+            hsr: adjusted[2],
+            vhsr: adjusted[3],
+            maxV: adjusted[4] || '—',
+            maxVkmh: adjusted[5] || '—',
+            maxVpct: adjusted[6] || '—',
+            hmld: adjusted[7] || '—',
+            hmldMin: adjusted[8] || '—',
+            accels: adjusted[9] || '—',
+            decels: adjusted[10] || '—',
+          });
+        }
+      }
+    }
+  }
+  
+  // Render player table
+  if (playerRows.length > 0) {
+    playerTable.innerHTML = `
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;">
+          <thead>
+            <tr style="border-bottom:1px solid var(--border);">
+              <th style="padding:6px 8px;text-align:left;color:var(--muted);">Player Name</th>
+              <th style="padding:6px 8px;text-align:center;color:var(--muted);">Game %<br/>Played</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--muted);">Total<br/>Distance (m)</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--muted);">HSR (m)<br/>>5.5m/s</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--muted);">vHSR (m)<br/>>7m/s</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--muted);">MAX Velocity<br/>(m/s)</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--muted);">Max V<br/>km/h</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--muted);">MAX Velocity<br/>%</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--muted);">HMLD</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--muted);">HMLD/MIN</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--muted);">Intense<br/>Accels<br/>>2.5m/s/s</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--muted);">Intense<br/>Decels<br/>>2.5m/s/s</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${playerRows.map((p, i) => `
+              <tr style="background:${i%2===0?'transparent':'rgba(255,255,255,0.02)'};border-bottom:1px solid #1A1A1A;">
+                <td style="padding:6px 8px;font-weight:600;">${p.name}</td>
+                <td style="padding:6px 8px;text-align:center;color:#777;">${p.gamePct}</td>
+                <td style="padding:6px 8px;text-align:right;">${p.dist}</td>
+                <td style="padding:6px 8px;text-align:right;">${p.hsr}</td>
+                <td style="padding:6px 8px;text-align:right;">${p.vhsr}</td>
+                <td style="padding:6px 8px;text-align:right;color:#3498DB;">${p.maxV}</td>
+                <td style="padding:6px 8px;text-align:right;color:#777;">${p.maxVkmh}</td>
+                <td style="padding:6px 8px;text-align:right;color:#777;">${p.maxVpct}</td>
+                <td style="padding:6px 8px;text-align:right;">${p.hmld}</td>
+                <td style="padding:6px 8px;text-align:right;">${p.hmldMin}</td>
+                <td style="padding:6px 8px;text-align:right;color:#3498DB;">${p.accels}</td>
+                <td style="padding:6px 8px;text-align:right;color:#E67E22;">${p.decels}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  } else {
+    playerTable.innerHTML = '<div style="color:#555;font-size:12px;padding:8px;">No player data detected. PDF may be in a different format.</div>';
+  }
+  
+  // Store GPS benchmarks for drill comparison
+  if (totalDist !== '—' && totalHSR !== '—' && totalHMLD !== '—' && totalAccels !== '—' && totalDecels !== '—') {
+    // Extract match info from filename
+    const matchDate = filename.match(/(\d{1,2})[._-](\d{1,2})[._-](\d{4})/);
+    const opponent = filename.replace(/\.pdf$/i, '').replace(/_/g, ' ').replace(/NPL|RD\d+|copy/gi, '').trim();
+    
+    // Calculate duration in decimal minutes
+    let durationMins = 95; // default
+    if (gameMatch) {
+      const timeParts = gameMatch[1].split(':');
+      if (timeParts.length === 2) {
+        // MM:SS format
+        durationMins = parseInt(timeParts[0]) + (parseInt(timeParts[1]) / 60);
+      } else if (timeParts.length === 3) {
+        // H:MM:SS format
+        durationMins = (parseInt(timeParts[0]) * 60) + parseInt(timeParts[1]) + (parseInt(timeParts[2]) / 60);
+      }
+    }
+    
+    // Calculate per-minute benchmarks
+    const benchmark = {
+      date: matchDate ? matchDate[3]+'-'+matchDate[2].padStart(2,'0')+'-'+matchDate[1].padStart(2,'0') : new Date().toISOString().slice(0,10),
+      opponent: opponent || 'Unknown',
+      filename: filename,
+      duration: durationMins,
+      total_dist_per_min: parseFloat(totalDist) / durationMins,
+      hsr_per_min: parseFloat(totalHSR) / durationMins,
+      hmld_per_min: parseFloat(totalHMLD) / durationMins,
+      accels_per_min: parseFloat(totalAccels) / durationMins,
+      decels_per_min: parseFloat(totalDecels) / durationMins,
+      max_velocity: maxVelocity !== '—' ? parseFloat(maxVelocity) : null
+    };
+    
+    // Update latest and add to history
+    matchGPSBenchmarks.latest = benchmark;
+    matchGPSBenchmarks.history.unshift(benchmark);
+    if (matchGPSBenchmarks.history.length > 50) matchGPSBenchmarks.history = matchGPSBenchmarks.history.slice(0, 50);
+    
+    // Persist to localStorage
+    try {
+      localStorage.setItem(GPS_BENCHMARKS_KEY, JSON.stringify(matchGPSBenchmarks));
+    } catch (e) {
+      console.warn('Failed to save GPS benchmarks to localStorage:', e);
+    }
+    
+    // Update dropdown in Drill Audit
+    updateGPSBenchmarkDropdown();
+    
+    showToast('GPS Match Benchmark saved ✓');
+  }
+}
+
+// AI analysis functions removed
+
+// ========== GPS MATCH COMPARISON ==========
+function updateGPSBenchmarkDropdown() {
+  const select = document.getElementById('gps-benchmark-select');
+  const status = document.getElementById('gps-benchmark-status');
+  const historyDiv = document.getElementById('gps-benchmark-history');
+  
+  if (!matchGPSBenchmarks.latest) {
+    select.innerHTML = '<option value="">No GPS benchmark loaded</option>';
+    status.textContent = 'Upload a GPS match report to enable';
+    status.style.color = '#777';
+    if (historyDiv) historyDiv.innerHTML = '<div style="font-size:12px;color:#777;font-style:italic;">No benchmarks saved yet</div>';
+    return;
+  }
+  
+  // Build options from history
+  const options = matchGPSBenchmarks.history.map((b, i) => {
+    const label = i === 0 ? `${b.opponent} - ${b.date} (Latest)` : `${b.opponent} - ${b.date}`;
+    return `<option value="${i}" ${i===0?'selected':''}>${label}</option>`;
+  }).join('');
+  
+  select.innerHTML = options;
+  status.textContent = `✓ Match benchmark available (${matchGPSBenchmarks.latest.opponent})`;
+  status.style.color = '#27AE60';
+  
+  // Update history display
+  if (historyDiv) {
+    const historyHTML = matchGPSBenchmarks.history.map((b, i) => `
+      <div style="padding:10px;background:${i===0?'rgba(52,152,219,0.1)':'var(--panel2)'};border:1px solid var(--border);border-radius:3px;margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <div style="font-weight:600;font-size:13px;">${b.opponent} - ${b.date}${i===0?' <span style="color:#3498DB;font-size:10px;letter-spacing:1px;">(LATEST)</span>':''}</div>
+            <div style="font-size:11px;color:#777;margin-top:3px;">${b.duration.toFixed(0)} mins · ${b.filename}</div>
+          </div>
+          <div style="text-align:right;font-size:11px;color:#888;">
+            <div>${b.total_dist_per_min.toFixed(1)} m/min</div>
+            <div>${b.hsr_per_min.toFixed(1)} HSR/min</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:8px;font-size:10px;">
+          <div><span style="color:#777;">HMLD/min:</span> ${b.hmld_per_min.toFixed(1)}</div>
+          <div><span style="color:#777;">Accels/min:</span> ${b.accels_per_min.toFixed(2)}</div>
+          <div><span style="color:#777;">Decels/min:</span> ${b.decels_per_min.toFixed(2)}</div>
+          <div><span style="color:#777;">Max Vel:</span> ${b.max_velocity ? b.max_velocity.toFixed(2) + ' m/s' : '—'}</div>
+          <div><span style="color:#777;">Avg Vel:</span> ${(b.total_dist_per_min / 60).toFixed(2)} m/s</div>
+        </div>
+      </div>
+    `).join('');
+    historyDiv.innerHTML = historyHTML;
+  }
+}
+
+function calculateGMI(drillGPS, drillDuration, benchmark) {
+  if (!drillGPS || !benchmark || !drillDuration || drillDuration === 0) return null;
+  
+  // Calculate drill per-minute values
+  const drillTotalDistpm = drillGPS.totalDist / drillDuration;
+  const drillHSRpm = drillGPS.hsr / drillDuration;
+  const drillHMLDpm = drillGPS.hmld / drillDuration;
+  const drillAccelspm = drillGPS.accels / drillDuration;
+  const drillDecelspm = drillGPS.decels / drillDuration;
+  const drillMaxVel = drillGPS.maxVel || 0;
+  
+  // Calculate similarity scores (0-100 for each component)
+  // Score = 100 - (|difference| / benchmark * 100), capped at 0-100
+  function similarity(drillVal, benchVal) {
+    if (benchVal === 0 || benchVal === null) return drillVal === 0 ? 100 : 0;
+    const diff = Math.abs(drillVal - benchVal);
+    const pctDiff = (diff / benchVal) * 100;
+    return Math.max(0, Math.min(100, 100 - pctDiff));
+  }
+  
+  const totalDistScore = similarity(drillTotalDistpm, benchmark.total_dist_per_min);
+  const hsrScore = similarity(drillHSRpm, benchmark.hsr_per_min);
+  const hmldScore = similarity(drillHMLDpm, benchmark.hmld_per_min);
+  const accelsScore = similarity(drillAccelspm, benchmark.accels_per_min);
+  const decelsScore = similarity(drillDecelspm, benchmark.decels_per_min);
+  
+  // Max velocity comparison (absolute value, not per-minute)
+  const hasMaxVel = drillMaxVel > 0 && benchmark.max_velocity && benchmark.max_velocity > 0;
+  const maxVelScore = hasMaxVel ? similarity(drillMaxVel, benchmark.max_velocity) : null;
+  
+  // Overall GMI - adaptive weighting based on available components
+  // 6 components (all GPS data): ~16.67% each
+  // 5 components (no max vel): 20% each
+  // 4 components (original): 25% each
+  let gmi;
+  let numComponents = 5; // totalDist, HSR, HMLD, Accels, Decels
+  
+  if (hasMaxVel) {
+    numComponents = 6;
+    gmi = Math.round((totalDistScore + hsrScore + hmldScore + maxVelScore + accelsScore + decelsScore) / 6);
+  } else {
+    gmi = Math.round((totalDistScore + hsrScore + hmldScore + accelsScore + decelsScore) / 5);
+  }
+  
+  const components = {
+    totalDist: {score: Math.round(totalDistScore), drill: drillTotalDistpm.toFixed(0), match: benchmark.total_dist_per_min.toFixed(0), pct: (drillTotalDistpm/benchmark.total_dist_per_min*100).toFixed(0)},
+    hsr: {score: Math.round(hsrScore), drill: drillHSRpm.toFixed(1), match: benchmark.hsr_per_min.toFixed(1), pct: (drillHSRpm/benchmark.hsr_per_min*100).toFixed(0)},
+    hmld: {score: Math.round(hmldScore), drill: drillHMLDpm.toFixed(1), match: benchmark.hmld_per_min.toFixed(1), pct: (drillHMLDpm/benchmark.hmld_per_min*100).toFixed(0)},
+    accels: {score: Math.round(accelsScore), drill: drillAccelspm.toFixed(1), match: benchmark.accels_per_min.toFixed(1), pct: (drillAccelspm/benchmark.accels_per_min*100).toFixed(0)},
+    decels: {score: Math.round(decelsScore), drill: drillDecelspm.toFixed(1), match: benchmark.decels_per_min.toFixed(1), pct: (drillDecelspm/benchmark.decels_per_min*100).toFixed(0)}
+  };
+  
+  // Add max velocity if available
+  if (hasMaxVel) {
+    components.maxVel = {
+      score: Math.round(maxVelScore), 
+      drill: drillMaxVel.toFixed(2), 
+      match: benchmark.max_velocity.toFixed(2), 
+      pct: (drillMaxVel/benchmark.max_velocity*100).toFixed(0)
+    };
+  }
+  
+  return {gmi, components};
+}
+
+// ========== PDF EXPORT ==========
+function showPdfExportModal(){document.getElementById('pdf-modal').classList.add('open');}
+function exportPDF() {
+  document.getElementById('pdf-modal').classList.remove('open');
+  const jsPDF=window.jspdf?window.jspdf.jsPDF:null;
+  if(!jsPDF){alert('PDF library not loaded.');return;}
+  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'}),W=210,M=14,CW=182;let y=0;
+  function addHeader(){doc.setFillColor(10,10,10);doc.rect(0,0,W,18,'F');doc.setFillColor(196,18,48);doc.rect(0,16,W,2,'F');doc.setTextColor(232,232,232);doc.setFont('helvetica','bold');doc.setFontSize(13);doc.text('WSW FC — BIP Profile Report',M,11);doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(120,120,120);doc.text('Generated '+new Date().toLocaleDateString('en-AU'),W-M,11,{align:'right'});y=24;}
+  function chk(h){if(y+h>270){doc.addPage();y=0;addHeader();}}
+  function sh(t){chk(12);doc.setFillColor(26,26,26);doc.rect(M,y,CW,8,'F');doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(196,18,48);doc.text(t.toUpperCase(),M+3,y+5.5);y+=11;}
+  addHeader();
+  const b=computeBenchmarks(),d=b?b[0]:null;
+  if(d&&document.getElementById('pdf-benchmarks').checked){
+    sh('NPL Match Benchmarks — Full Game');
+    const stats=[['Avg BIP',d.avg_bip_mins+'m'],['Avg BOP',d.avg_bop_mins+'m'],['BIP Density',d.bip_pct+'%'],['W:R Ratio',d.wr_ratio],['Med BOP',d.est_median_bop+'s'],['Games',d.n_games]];
+    const bw=CW/3-2,bh=16;
+    stats.forEach((s,i)=>{const col=i%3,row=Math.floor(i/3),bx=M+col*(bw+3),by=y+row*(bh+3);doc.setFillColor(34,34,34);doc.rect(bx,by,bw,bh,'F');doc.setFont('helvetica','bold');doc.setFontSize(14);doc.setTextColor(232,75,75);doc.text(String(s[1]),bx+bw/2,by+bh*0.52,{align:'center'});doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(120,120,120);doc.text(s[0].toUpperCase(),bx+bw/2,by+bh*0.82,{align:'center'});});
+    y+=2*(bh+3)+6;
+  }
+  if(document.getElementById('pdf-gamelist').checked){
+    chk(16);sh('Game Log');
+    const hdrs=[['Opponent',52],['Date',22],['Comp',16],['Loc',12],['BIP%',16],['Med BOP',18],['Fast Restart',24]];
+    doc.setFillColor(17,17,17);doc.rect(M,y,CW,7,'F');let cx=M+2;
+    hdrs.forEach(h=>{doc.setFont('helvetica','bold');doc.setFontSize(6.5);doc.setTextColor(120,120,120);doc.text(h[0],cx,y+4.8);cx+=h[1];});y+=7;
+    const mp={"0-15s":7.5,"15-30s":22.5,"30-60s":45,"60-90s":75,"90-120s":105,"120-150s":135,"150-200s":175,"200+s":230};
+    games.filter(g=>g.comp==='NPL').forEach((g,i)=>{
+      chk(7);if(i%2===0){doc.setFillColor(22,22,22);doc.rect(M,y,CW,6,'F');}
+      const bip=g.fg.bip.reduce((a,x)=>a+x.s,0),bop2=g.fg.bop.reduce((a,x)=>a+x.s,0),pct2=bip+bop2>0?((bip/(bip+bop2))*100).toFixed(1):'—';
+      let ws=0,wc=0;g.fg.bop.forEach(r=>{ws+=r.c*(mp[r.b]||0);wc+=r.c;});
+      const med2=wc?Math.round(ws/wc):'—',fc=g.fg.bop.filter(r=>r.b==='0-15s').reduce((a,r)=>a+r.c,0),tc=g.fg.bop.reduce((a,r)=>a+r.c,0),fp=tc?((fc/tc)*100).toFixed(0):'—';
+      cx=M+2;
+      [g.opponent.replace(/ FC$| FA$/,''),g.date,g.comp,g.location==='HOME'?'H':'A',pct2+'%',med2+'s',fp+'%'].forEach((v,vi)=>{
+        doc.setFont('helvetica',vi===0?'bold':'normal');doc.setFontSize(7);doc.setTextColor([200,200,200]);doc.text(String(v),cx,y+4.3);cx+=hdrs[vi][1];
+      });y+=6;
+    });y+=4;
+  }
+  doc.save('WSW_BIP_Report_'+new Date().toISOString().slice(0,10)+'.pdf');
+}
+
+// ========== STARTUP ==========
+updateAll();
+renderCalendar();
+renderWeekSummary();
+renderDrillLibrary();
+updateGPSBenchmarkDropdown();
+
+// Load persisted data on start
+(async function() {
+  try {
+    const calRes = await storage.get(STORAGE_KEY);
+    if (calRes && calRes.value) {
+      weekSessions = JSON.parse(calRes.value);
+      renderCalendar(); renderWeekSummary();
+    }
+  } catch(e) {}
+  try {
+    const gmRes = await storage.get(GAMES_KEY);
+    if (gmRes && gmRes.value) {
+      const uploaded = JSON.parse(gmRes.value);
+      uploaded.forEach(g => {
+        if (!games.some(x => x.opponent===g.opponent&&x.date===g.date&&x.comp===g.comp))
+          games.push(g);
+      });
+      updateAll();
+    }
+  } catch(e) {}
+  try {
+    const libRes = await storage.get(LIBRARY_KEY);
+    if (libRes && libRes.value) {
+      drillLibrary = JSON.parse(libRes.value);
+      renderDrillLibrary();
+    }
+  } catch(e) {}
+  
+  // Restore GPS benchmarks
+  try {
+    const gpsRes = await storage.get(GPS_BENCHMARKS_KEY);
+    if (gpsRes && gpsRes.value) {
+      const restored = JSON.parse(gpsRes.value);
+      if (restored && restored.history && Array.isArray(restored.history)) {
+        matchGPSBenchmarks = restored;
+        updateGPSBenchmarkDropdown();
+      }
+    }
+  } catch(e) {
+    // Fallback to localStorage if window.storage fails
+    try {
+      const localData = localStorage.getItem(GPS_BENCHMARKS_KEY);
+      if (localData) {
+        const restored = JSON.parse(localData);
+        if (restored && restored.history && Array.isArray(restored.history)) {
+          matchGPSBenchmarks = restored;
+          updateGPSBenchmarkDropdown();
+        }
+      }
+    } catch(e2) {}
+  }
+  
+  // Restore training drills
+  try {
+    const drillsRes = await storage.get(TRAINING_DRILLS_KEY);
+    if (drillsRes && drillsRes.value) {
+      const restored = JSON.parse(drillsRes.value);
+      if (restored && Array.isArray(restored)) {
+        trainingDrills = restored;
+      }
+    }
+  } catch(e) {
+    // Fallback to localStorage
+    try {
+      const localData = localStorage.getItem(TRAINING_DRILLS_KEY);
+      if (localData) {
+        const restored = JSON.parse(localData);
+        if (restored && Array.isArray(restored)) {
+          trainingDrills = restored;
+        }
+      }
+    } catch(e2) {}
+  }
+})();
+</script>
+</body>
+</html>  .modal-confirm:hover { background: var(--red-light); }
+  .modal-cancel { padding: 12px 20px; background: none; border: 1px solid var(--border); color: var(--muted); font-weight: 600; font-size: 13px; cursor: pointer; border-radius: 3px; }
+  .modal-cancel:hover { border-color: var(--text); color: var(--text); }
+
+  .half-selector { display: flex; gap: 8px; margin-bottom: 20px; }
+  .half-btn { padding: 7px 18px; background: var(--panel2); border: 1px solid var(--border); color: var(--muted); font-weight: 700; font-size: 13px; letter-spacing: 1px; cursor: pointer; border-radius: 3px; transition: all 0.2s; }
+  .half-btn:hover { border-color: var(--red); color: var(--text); }
+  .half-btn.active { background: var(--red); border-color: var(--red); color: white; }
+
+  .benchmark-grid { display: grid; grid-template-columns: repeat(6,1fr); gap: 12px; margin-bottom: 20px; }
+  .stat-box { background: var(--panel2); border: 1px solid var(--border); border-radius: 4px; padding: 14px; text-align: center; }
+  .stat-val { font-weight: 900; font-size: 30px; color: var(--red-light); line-height: 1; margin-bottom: 3px; }
+  .stat-label { font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+
+  .game-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .game-table th { font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border); }
+  .game-table td { padding: 9px 10px; border-bottom: 1px solid #1A1A1A; }
+  .game-table tr:hover td { background: #1E1E1E; }
+  .comp-badge { display: inline-block; padding: 2px 7px; border-radius: 2px; font-weight: 700; font-size: 10px; letter-spacing: 1px; }
+  .comp-npl { background: rgba(196,18,48,0.2); color: #E8193F; }
+  .comp-20s { background: rgba(52,152,219,0.2); color: #3498DB; }
+  .loc-badge { display: inline-block; padding: 2px 6px; border-radius: 2px; font-weight: 700; font-size: 10px; }
+  .loc-h { background: rgba(46,204,113,0.15); color: #2ECC71; }
+  .loc-a { background: rgba(200,169,81,0.15); color: #C8A951; }
+  .remove-game { background: none; border: 1px solid #2A2A2A; color: #444; padding: 3px 8px; border-radius: 2px; cursor: pointer; font-size: 10px; transition: all 0.2s; }
+  .remove-game:hover { border-color: var(--red); color: var(--red); }
+
+  .dist-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .bin-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .bin-label { font-weight: 600; font-size: 12px; color: var(--muted); width: 58px; text-align: right; flex-shrink: 0; }
+  .bin-track { flex: 1; height: 20px; background: var(--panel2); border-radius: 2px; overflow: hidden; }
+  .bin-fill { height: 100%; border-radius: 2px; transition: width 0.5s ease; }
+  .bin-pct { font-weight: 700; font-size: 12px; width: 38px; }
+  .bip-fill { background: var(--red); }
+  .bop-fill { background: var(--blue); }
+
+  .season-chart-wrap { overflow-x: auto; padding-bottom: 8px; }
+
+  .audit-layout { display: grid; grid-template-columns: 360px 1fr; gap: 18px; align-items: start; }
+  .input-group { margin-bottom: 14px; }
+  .input-label { font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); margin-bottom: 5px; display: block; }
+  input[type="text"], input[type="number"], select { width: 100%; background: var(--panel2); border: 1px solid var(--border); color: var(--text); padding: 8px 11px; font-family: 'Barlow', sans-serif; font-size: 13px; border-radius: 3px; outline: none; transition: border-color 0.2s; }
+  input:focus, select:focus { border-color: var(--red); }
+  select option { background: var(--panel2); }
+  .bin-inputs { display: grid; grid-template-columns: repeat(4,1fr); gap: 7px; margin-top: 5px; }
+  .bin-input-label { font-size: 10px; color: var(--muted); margin-bottom: 3px; display: block; }
+  .bin-inputs input { padding: 6px 7px; font-size: 12px; text-align: center; }
+  .calc-btn { width: 100%; padding: 13px; background: var(--red); border: none; color: white; font-weight: 700; font-size: 14px; letter-spacing: 2px; cursor: pointer; border-radius: 3px; transition: background 0.2s; margin-top: 6px; }
+  .calc-btn:hover { background: var(--red-light); }
+
+  .score-display { text-align: center; padding: 24px; background: var(--panel2); border: 1px solid var(--border); border-radius: 4px; margin-bottom: 16px; border-top: 3px solid var(--score-col, var(--red)); }
+  .score-number { font-weight: 900; font-size: 76px; line-height: 1; margin-bottom: 2px; }
+  .score-label-sm { font-weight: 700; font-size: 14px; letter-spacing: 3px; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  .score-classification { font-weight: 700; font-size: 20px; letter-spacing: 1px; }
+  .component-scores { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: 16px; }
+  .comp-score { background: var(--panel2); border: 1px solid var(--border); border-radius: 4px; padding: 12px; text-align: center; }
+  .comp-val { font-weight: 900; font-size: 30px; line-height: 1; margin-bottom: 3px; }
+  .comp-lbl { font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); }
+  .comp-wt { font-size: 10px; color: #444; }
+  .dist-comp-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .dist-comp-label { font-size: 12px; color: var(--muted); width: 55px; text-align: right; flex-shrink: 0; }
+  .dist-comp-bars { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+  .dist-comp-bar { height: 9px; border-radius: 1px; }
+  .match-bar { background: rgba(196,18,48,0.65); }
+  .drill-bar { background: rgba(52,152,219,0.8); }
+  .legend { display: flex; gap: 14px; margin-top: 8px; }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); }
+  .legend-dot { width: 11px; height: 11px; border-radius: 2px; }
+  .presc-tags { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 8px; }
+  .presc-tag { padding: 4px 11px; border-radius: 3px; font-weight: 700; font-size: 11px; letter-spacing: 1px; }
+  .tag-r { background: rgba(52,152,219,0.15); color: #3498DB; border: 1px solid rgba(52,152,219,0.25); }
+  .tag-s { background: rgba(196,18,48,0.15); color: #E8193F; border: 1px solid rgba(196,18,48,0.25); }
+  .tag-t { background: rgba(200,169,81,0.15); color: #C8A951; border: 1px solid rgba(200,169,81,0.25); }
+
+  .drill-row { display: grid; grid-template-columns: 190px 70px 70px 65px 80px 70px 130px auto; gap: 6px; align-items: center; padding: 9px 12px; background: var(--panel2); border: 1px solid var(--border); border-radius: 3px; font-size: 12px; }
+  .drill-row.header { font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); background: var(--panel); padding: 7px 12px; }
+  .score-chip { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 24px; border-radius: 3px; font-weight: 700; font-size: 13px; }
+  .remove-btn { background: none; border: 1px solid #2A2A2A; color: #444; cursor: pointer; padding: 3px 8px; border-radius: 3px; font-size: 10px; transition: all 0.2s; }
+  .remove-btn:hover { border-color: var(--red); color: var(--red); }
+  .add-drill-row { display: flex; gap: 8px; align-items: center; padding: 9px 12px; background: rgba(196,18,48,0.04); border: 1px dashed rgba(196,18,48,0.18); border-radius: 3px; cursor: pointer; color: var(--red-light); font-size: 12px; font-weight: 600; letter-spacing: 1px; transition: all 0.2s; }
+  .add-drill-row:hover { background: rgba(196,18,48,0.09); }
+  .session-summary { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; padding: 14px; background: var(--panel2); border: 1px solid var(--border); border-radius: 4px; margin-top: 14px; }
+
+  .ref-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+  .ref-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 20px; }
+  .archetype-card { background: var(--panel2); border-radius: 4px; padding: 18px; border-left: 4px solid var(--border); }
+  .archetype-card.type-a { border-left-color: var(--blue); }
+  .archetype-card.type-b { border-left-color: var(--green); }
+  .archetype-card.type-c { border-left-color: var(--orange); }
+  .archetype-badge { font-weight: 900; font-size: 20px; }
+  .type-a .archetype-badge { color: var(--blue); }
+  .type-b .archetype-badge { color: var(--green); }
+  .type-c .archetype-badge { color: var(--orange); }
+  .archetype-name { font-weight: 700; font-size: 14px; }
+  .archetype-desc { font-size: 12px; color: var(--muted); line-height: 1.5; margin: 8px 0; }
+  .archetype-examples { font-size: 11px; color: #555; font-style: italic; }
+  .score-zone-table { width: 100%; border-collapse: collapse; }
+  .score-zone-table th { font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); padding: 7px 10px; text-align: left; border-bottom: 1px solid var(--border); }
+  .score-zone-table td { padding: 9px 10px; font-size: 13px; border-bottom: 1px solid #1A1A1A; }
+  .zone-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; }
+  .weekly-arc { display: grid; grid-template-columns: repeat(5,1fr); gap: 1px; background: var(--border); border-radius: 4px; overflow: hidden; margin-bottom: 16px; }
+  .arc-day { background: var(--panel2); padding: 14px 10px; text-align: center; }
+  .arc-day-label { font-weight: 700; font-size: 12px; letter-spacing: 1px; color: var(--muted); margin-bottom: 3px; }
+  .arc-md { font-weight: 900; font-size: 20px; color: var(--red-light); margin-bottom: 6px; }
+  .arc-targets { font-size: 11px; color: var(--muted); line-height: 1.7; }
+  .arc-targets strong { color: var(--text); font-weight: 500; }
+
+  .info-note { background: rgba(196,18,48,0.06); border: 1px solid rgba(196,18,48,0.18); border-radius: 4px; padding: 10px 14px; font-size: 12px; color: #AA8888; line-height: 1.5; margin-bottom: 14px; }
+  .divider { height: 1px; background: var(--border); margin: 18px 0; }
+  .placeholder { text-align: center; padding: 50px 20px; color: var(--muted); }
+  .empty-state { text-align: center; padding: 40px; color: var(--muted); font-size: 13px; }
+  h3.sub-heading { font-weight: 700; font-size: 14px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: var(--dark); }
+  ::-webkit-scrollbar-thumb { background: #2E2E2E; border-radius: 3px; }
+
+  /* GPS PDF Reader styles */
+  .gps-reader-zone { border: 2px dashed var(--border); border-radius: 6px; padding: 32px; text-align: center; transition: all 0.2s; cursor: pointer; }
+  .gps-reader-zone:hover, .gps-reader-zone.drag-over { border-color: var(--blue); background: rgba(52,152,219,0.04); }
+  .gps-stat-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin: 16px 0; }
+  .gps-stat-cell { background: var(--panel2); border: 1px solid var(--border); border-radius: 4px; padding: 14px; text-align: center; }
+  .gps-stat-val { font-weight: 900; font-size: 24px; color: var(--blue); line-height: 1; }
+  .gps-stat-lbl { font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-top: 4px; }
+
+/* AI styles removed */
+
+  /* Force wider layout to prevent wrapping on smaller monitors */
+  .section { min-width: 1200px; }
+  
+  .benchmark-grid { 
+    display: grid; 
+    grid-template-columns: repeat(6, minmax(140px, 1fr)); 
+    gap: 12px; 
+    margin-bottom: 20px; 
+  }
+  
+  .session-table th { 
+    font-size: 10px; 
+    letter-spacing: 1.5px; 
+    text-transform: uppercase; 
+    color: var(--muted); 
+    padding: 8px 10px; 
+    text-align: left; 
+    border-bottom: 1px solid var(--border); 
+    font-weight: 600; 
+    white-space: nowrap;
+    min-width: 80px;
+  }
+  
+  .session-table td {
+    white-space: nowrap;
+    min-width: 80px;
+  }
+  
+  .stat-box {
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 14px;
+    text-align: center;
+    min-width: 120px;
+  }
+  
+  /* Force wider layout to prevent wrapping on smaller monitors */
+  .section { min-width: 1200px; }
+  
+  .benchmark-grid { 
+    display: grid; 
+    grid-template-columns: repeat(6, minmax(140px, 1fr)); 
+    gap: 12px; 
+    margin-bottom: 20px; 
+  }
+  
+  .session-table th { 
+    white-space: nowrap;
+    min-width: 80px;
+  }
+  
+  .session-table td {
+    white-space: nowrap;
+    min-width: 80px;
+  }
+  
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+</head>
+<body>
+
+<!-- UPLOAD MODAL -->
+<div class="modal-overlay" id="parse-modal">
+  <div class="modal">
+    <div class="modal-title">CSV Parse Summary</div>
+    <div class="modal-sub" id="modal-filename">—</div>
+    <div id="modal-stats"></div>
+    <div id="modal-flags"></div>
+    <div class="modal-actions">
+      <button class="modal-cancel" onclick="closeModal()">Cancel</button>
+      <button class="modal-confirm" id="modal-confirm-btn" onclick="confirmUpload()">ADD TO DATASET</button>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="csv-file-input" accept=".csv" multiple onchange="handleFileSelect(event)" />
+
+<nav>
+  <div class="nav-brand">
+    WSW FC <span class="nav-badge">BIP</span>
+  </div>
+  <div class="nav-tabs">
+    <div class="nav-tab active" onclick="showTab('benchmarks')">Match Benchmarks</div>
+    <div class="nav-tab" onclick="showTab('audit')">Drill Audit Tool</div>
+    <div class="nav-tab" onclick="showTab('session')">Session Audit</div>
+    <div class="nav-tab" onclick="showTab('calendar')">Week Audit</div>
+    <div class="nav-tab" onclick="showTab('library')">Drill Library</div>
+    <div class="nav-tab" onclick="showTab('reference')">Coach Reference</div>
+    <div class="nav-tab" onclick="showTab('gpsreader')">GPS Report</div>
+  </div>
+  <div class="nav-right">
+    <span class="data-status" id="data-status">R1–R8 hardcoded</span>
+    <button class="upload-btn" onclick="document.getElementById('csv-file-input').click()">+ Upload CSV</button>
     <button class="upload-btn" style="background:#4285F4;border:1px solid #3367D6;color:white;" onclick="fetchFromBigQuery()">⚡ Fetch from BigQuery</button>
     <button class="upload-btn" style="background:var(--panel2);border:1px solid var(--border);color:var(--muted);" onclick="showPdfExportModal()">Export PDF</button>
     <button class="upload-btn" style="background:var(--panel2);border:1px solid var(--border);color:var(--muted);" onclick="saveToStorage()">Save</button>
