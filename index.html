@@ -2271,6 +2271,9 @@ function parseDrillPDF(pageTexts,statusEl,resultsEl,listEl) {
       results.length = 0;
       results.push(...finalResults);
       
+      console.log('Final drill count after set splitting:', results.length);
+      console.log('Final drill names:', results.map(d => d.name));
+      
       // Extract Max Velocity from player breakdown pages
       console.log('Extracting Max Velocity from player breakdown pages...');
       results.forEach(drill => {
