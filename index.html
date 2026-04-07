@@ -283,6 +283,7 @@
   <div class="nav-right">
     <span class="data-status" id="data-status">R1–R8 hardcoded</span>
     <button class="upload-btn" onclick="document.getElementById('csv-file-input').click()">+ Upload CSV</button>
+    <button class="upload-btn" style="background:#4285F4;border:1px solid #3367D6;color:white;" onclick="fetchFromBigQuery()">⚡ Fetch from BigQuery</button>
     <button class="upload-btn" style="background:var(--panel2);border:1px solid var(--border);color:var(--muted);" onclick="showPdfExportModal()">Export PDF</button>
     <button class="upload-btn" style="background:var(--panel2);border:1px solid var(--border);color:var(--muted);" onclick="saveToStorage()">Save</button>
     <button class="upload-btn" style="background:var(--panel2);border:1px solid var(--border);color:var(--muted);" onclick="loadFromStorage()">Restore</button>
@@ -903,6 +904,244 @@ function showToast(msg, isErr) {
   t.style.opacity = '1';
   clearTimeout(t._timer);
   t._timer = setTimeout(() => { t.style.opacity='0'; }, 2200);
+}
+
+// ========== BIGQUERY INTEGRATION ==========
+const BIGQUERY_CONFIG = {
+  projectId: 'wsw-npl-gps-2026', // Your GCP project ID
+  dataset: 'gps_pipeline',
+  // Store access token in localStorage (set via Settings or OAuth flow)
+  getAccessToken: () => localStorage.getItem('gcp_access_token'),
+  setAccessToken: (token) => localStorage.setItem('gcp_access_token', token)
+};
+
+async function fetchFromBigQuery() {
+  const accessToken = BIGQUERY_CONFIG.getAccessToken();
+  
+  if (!accessToken) {
+    // Show OAuth/API key setup modal
+    showBigQuerySetupModal();
+    return;
+  }
+  
+  showToast('Fetching from BigQuery...');
+  
+  try {
+    const query = `
+      SELECT 
+        opponent,
+        match_date as date,
+        competition as comp,
+        location,
+        -- BIP/BOP bin counts
+        bin_0_15s,
+        bin_15_30s,
+        bin_30_60s,
+        bin_60_90s,
+        bin_90_120s,
+        bin_120_150s,
+        bin_150_200s,
+        bin_200plus,
+        -- Summary stats (full game)
+        fg_bip_time,
+        fg_bop_time,
+        fg_bip_pct,
+        fg_median_bop,
+        -- 1st half
+        h1_bip_time,
+        h1_bop_time,
+        h1_bip_pct,
+        h1_median_bop,
+        -- 2nd half
+        h2_bip_time,
+        h2_bop_time,
+        h2_bip_pct,
+        h2_median_bop
+      FROM \`${BIGQUERY_CONFIG.projectId}.${BIGQUERY_CONFIG.dataset}.MASTER_Summary\`
+      WHERE season = '2026' 
+        AND competition = 'NPL'
+      ORDER BY match_date DESC
+      LIMIT 50
+    `;
+    
+    const response = await fetch(
+      `https://bigquery.googleapis.com/bigquery/v2/projects/${BIGQUERY_CONFIG.projectId}/queries`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          query: query,
+          useLegacySql: false,
+          timeoutMs: 30000
+        })
+      }
+    );
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error?.message || 'BigQuery request failed');
+    }
+    
+    const data = await response.json();
+    
+    if (!data.jobComplete) {
+      throw new Error('Query did not complete in time');
+    }
+    
+    // Parse results and populate games array
+    parseBigQueryResults(data.rows, data.schema.fields);
+    
+    showToast(`✓ Loaded ${data.totalRows} games from BigQuery`);
+    
+  } catch (error) {
+    console.error('BigQuery fetch error:', error);
+    
+    if (error.message.includes('401') || error.message.includes('403')) {
+      showToast('BigQuery auth failed - check access token', true);
+      showBigQuerySetupModal();
+    } else {
+      showToast('BigQuery fetch failed: ' + error.message, true);
+    }
+  }
+}
+
+function parseBigQueryResults(rows, fields) {
+  if (!rows || rows.length === 0) {
+    showToast('No games found in BigQuery', true);
+    return;
+  }
+  
+  // Map field names to indices
+  const fieldMap = {};
+  fields.forEach((f, i) => fieldMap[f.name] = i);
+  
+  // Clear existing uploaded games
+  games = games.filter(g => !g._uploaded);
+  
+  rows.forEach(row => {
+    const vals = row.f.map(f => f.v);
+    
+    // Extract bin counts
+    const binCounts = [
+      parseInt(vals[fieldMap['bin_0_15s']]) || 0,
+      parseInt(vals[fieldMap['bin_15_30s']]) || 0,
+      parseInt(vals[fieldMap['bin_30_60s']]) || 0,
+      parseInt(vals[fieldMap['bin_60_90s']]) || 0,
+      parseInt(vals[fieldMap['bin_90_120s']]) || 0,
+      parseInt(vals[fieldMap['bin_120_150s']]) || 0,
+      parseInt(vals[fieldMap['bin_150_200s']]) || 0,
+      parseInt(vals[fieldMap['bin_200plus']]) || 0
+    ];
+    
+    const game = {
+      opponent: vals[fieldMap['opponent']],
+      date: vals[fieldMap['date']],
+      comp: vals[fieldMap['comp']],
+      location: vals[fieldMap['location']] === 'H' ? 'H' : 'A',
+      _uploaded: true,
+      _source: 'BigQuery',
+      fg: {
+        bins: binCounts,
+        avgBIP: parseFloat(vals[fieldMap['fg_bip_time']]) || 0,
+        avgBOP: parseFloat(vals[fieldMap['fg_bop_time']]) || 0,
+        bipPct: parseFloat(vals[fieldMap['fg_bip_pct']]) || 0,
+        medBOP: parseInt(vals[fieldMap['fg_median_bop']]) || 0
+      },
+      h1: {
+        bins: binCounts, // TODO: Split bins by half if available in BigQuery
+        avgBIP: parseFloat(vals[fieldMap['h1_bip_time']]) || 0,
+        avgBOP: parseFloat(vals[fieldMap['h1_bop_time']]) || 0,
+        bipPct: parseFloat(vals[fieldMap['h1_bip_pct']]) || 0,
+        medBOP: parseInt(vals[fieldMap['h1_median_bop']]) || 0
+      },
+      h2: {
+        bins: binCounts,
+        avgBIP: parseFloat(vals[fieldMap['h2_bip_time']]) || 0,
+        avgBOP: parseFloat(vals[fieldMap['h2_bop_time']]) || 0,
+        bipPct: parseFloat(vals[fieldMap['h2_bip_pct']]) || 0,
+        medBOP: parseInt(vals[fieldMap['h2_median_bop']]) || 0
+      }
+    };
+    
+    // Add club logo if available
+    const logo = CLUB_LOGOS[game.opponent];
+    if (logo) game.logo = logo;
+    
+    games.push(game);
+  });
+  
+  // Update UI
+  updateAll();
+  
+  // Auto-save
+  saveToStorage().catch(() => {});
+}
+
+function showBigQuerySetupModal() {
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;z-index:10000;';
+  
+  const currentToken = BIGQUERY_CONFIG.getAccessToken() || '';
+  
+  modal.innerHTML = `
+    <div style="background:var(--dark);border:2px solid var(--red);border-radius:6px;padding:24px;max-width:600px;width:90%;">
+      <h2 style="font-size:18px;font-weight:700;margin-bottom:12px;color:var(--red);">BigQuery API Setup</h2>
+      <p style="font-size:13px;color:#AAA;margin-bottom:16px;">Enter your GCP access token to fetch match data from BigQuery.</p>
+      
+      <div style="margin-bottom:16px;">
+        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:6px;">Access Token</label>
+        <input type="text" id="bq-access-token" value="${currentToken}" 
+          placeholder="ya29.a0AfH6SMBx..." 
+          onkeypress="if(event.key==='Enter')saveBigQueryToken()"
+          style="width:100%;padding:8px;background:var(--panel2);border:1px solid var(--border);color:var(--text);font-size:12px;border-radius:3px;" />
+      </div>
+      
+      <div style="background:rgba(255,152,0,0.1);border:1px solid rgba(255,152,0,0.3);border-radius:4px;padding:12px;margin-bottom:16px;">
+        <div style="font-size:11px;color:#FFA500;line-height:1.6;">
+          <strong>How to get an access token:</strong><br/>
+          1. Go to <a href="https://console.cloud.google.com" target="_blank" style="color:#3498DB;">GCP Console</a><br/>
+          2. Enable BigQuery API<br/>
+          3. Create service account with BigQuery Data Viewer role<br/>
+          4. Generate OAuth token or use: <code style="background:rgba(0,0,0,0.3);padding:2px 4px;">gcloud auth print-access-token</code><br/>
+          <em>Note: Tokens expire after ~1 hour. For permanent access, implement OAuth 2.0 flow.</em>
+        </div>
+      </div>
+      
+      <div style="display:flex;gap:10px;justify-content:flex-end;">
+        <button onclick="this.closest('div[style*=fixed]').remove()" 
+          style="padding:8px 16px;background:var(--panel2);border:1px solid var(--border);color:var(--muted);font-weight:600;cursor:pointer;border-radius:3px;">
+          Cancel
+        </button>
+        <button onclick="saveBigQueryToken()" 
+          style="padding:8px 16px;background:var(--red);border:none;color:white;font-weight:700;cursor:pointer;border-radius:3px;">
+          Save & Fetch
+        </button>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  document.getElementById('bq-access-token').focus();
+}
+
+function saveBigQueryToken() {
+  const token = document.getElementById('bq-access-token').value.trim();
+  
+  if (!token) {
+    showToast('Please enter an access token', true);
+    return;
+  }
+  
+  BIGQUERY_CONFIG.setAccessToken(token);
+  
+  // Close modal
+  document.querySelector('div[style*="position:fixed"]').remove();
+  
+  // Fetch data
+  fetchFromBigQuery();
 }
 
 // ========== DEFAULT HARDCODED DATA (R1–R8 NPL) ==========
