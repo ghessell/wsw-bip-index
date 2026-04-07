@@ -2114,18 +2114,39 @@ function parseDrillPDF(pageTexts,statusEl,resultsEl,listEl) {
     });
     
     // Parse rep-level data from "Drills" page (Page 2) if available
+    console.log('========== SEARCHING FOR REP-LEVEL PAGE ==========');
+    console.log('Total pages in PDF:', pageTexts.length);
+    
     let repsPageIdx = -1;
     for (let i = 0; i < pageTexts.length; i++) {
       const txt = extractText(pageTexts[i]);
-      if (txt.indexOf('Drill Duration') >= 0 && txt.indexOf('Ball Out Of Play Duration') >= 0) {
+      const hasDrillDuration = txt.indexOf('Drill Duration') >= 0 || txt.indexOf('Drill\nDuration') >= 0;
+      const hasBOP = txt.indexOf('Ball Out') >= 0; // Changed from 'Ball Out Of Play'
+      
+      console.log(`Page ${i + 1}: Drill Duration=${hasDrillDuration}, Ball Out=${hasBOP}`);
+      if (i < 3) {
+        console.log(`  Preview: ${txt.substring(0, 200).replace(/\n/g, ' ')}`);
+      }
+      
+      // Look for page with drill rep data (contains both drill duration and BOP columns)
+      if (hasDrillDuration && hasBOP) {
         repsPageIdx = i;
+        console.log(`✓ FOUND REP-LEVEL PAGE: Page ${i + 1}`);
         break;
       }
     }
     
+    if (repsPageIdx < 0) {
+      console.log('✗ REP-LEVEL PAGE NOT FOUND');
+      console.log('Searching for pages with "Drill Duration" AND "Ball Out"');
+    }
+    console.log('==================================================');
+    
     if (repsPageIdx >= 0) {
       const repsData = {};
       const repsLines = toLines(pageTexts[repsPageIdx]);
+      
+      console.log('Parsing rep-level BIP/BOP data from page', repsPageIdx + 1);
       
       repsLines.forEach(line => {
         const tokens = line.tokens.slice().sort((a,b) => a.x - b.x);
@@ -2174,6 +2195,10 @@ function parseDrillPDF(pageTexts,statusEl,resultsEl,listEl) {
       });
       
       // Match reps data to drill summaries
+      console.log('Matching rep data to drill summaries...');
+      console.log('Drill summaries count:', results.length);
+      console.log('Rep data keys:', Object.keys(repsData));
+      
       results.forEach(drill => {
         let matchKey = null, bestScore = 0;
         Object.keys(repsData).forEach(k => {
@@ -2193,8 +2218,63 @@ function parseDrillPDF(pageTexts,statusEl,resultsEl,listEl) {
           drill.binCounts = repsData[matchKey].binCounts;
           drill.medBOPsecs = Math.round(med(repsData[matchKey].bops));
           drill.repCount = repsData[matchKey].bipSecs.length;
+          console.log(`✓ Matched "${drill.name}" → "${matchKey}" (${drill.repCount} reps, median BOP ${drill.medBOPsecs}s)`);
+        } else {
+          console.log(`✗ No match for "${drill.name}"`);
         }
       });
+      
+      // Extract Max Velocity from player breakdown pages
+      console.log('Extracting Max Velocity from player breakdown pages...');
+      results.forEach(drill => {
+        // Look for a page with this drill's name as a heading
+        for (let pageIdx = 0; pageIdx < pageTexts.length; pageIdx++) {
+          const pageText = extractText(pageTexts[pageIdx]);
+          
+          // Check if this page is a drill breakdown for this drill
+          // Page should contain drill name and "Max Velocity (m/s)" column
+          if (pageText.indexOf(drill.name) >= 0 && pageText.indexOf('Max Velocity (m/s)') >= 0) {
+            const pageLines = toLines(pageTexts[pageIdx]);
+            const maxVels = [];
+            
+            // Parse each line looking for Max Velocity values
+            pageLines.forEach(line => {
+              const tokens = line.tokens.slice().sort((a,b) => a.x - b.x);
+              const texts = tokens.map(t => t.text.trim()).filter(Boolean);
+              
+              // Skip header rows and empty rows
+              if (texts.length < 5) return;
+              if (texts.some(t => t === 'Max Velocity (m/s)' || t === 'Player Name')) return;
+              
+              // Look for numeric values that could be max velocity (typically 4-9 m/s)
+              texts.forEach(t => {
+                const val = parseFloat(t);
+                if (!isNaN(val) && val >= 4.0 && val <= 12.0) {
+                  // This could be a max velocity value
+                  maxVels.push(val);
+                }
+              });
+            });
+            
+            // Calculate average max velocity if we found values
+            if (maxVels.length > 0) {
+              // Remove outliers (keep middle 80% of values)
+              maxVels.sort((a,b) => a - b);
+              const trim = Math.floor(maxVels.length * 0.1);
+              const trimmed = maxVels.slice(trim, maxVels.length - trim);
+              
+              const avgMaxVel = trimmed.reduce((sum, v) => sum + v, 0) / trimmed.length;
+              drill.gps.maxVel = parseFloat(avgMaxVel.toFixed(2));
+              
+              console.log(`✓ Max Velocity for "${drill.name}": ${drill.gps.maxVel} m/s (avg of ${trimmed.length} players)`);
+            }
+            break; // Found the page, no need to check others
+          }
+        }
+      });
+    } else {
+      console.warn('⚠ Rep-level page not found - bins and median BOP will be empty');
+      console.warn('  This PDF may not have a "Drills" page with rep-level BIP/BOP data');
     }
     
     if (!results.length) {
@@ -2352,7 +2432,13 @@ function loadPDFDrill(idx) {
     return;
   }
   
-  console.log('Loading drill:', d.name, 'with data:', d);
+  console.log('========================================');
+  console.log('LOADING DRILL FROM PDF');
+  console.log('Drill name:', d.name);
+  console.log('Complete drill object:', d);
+  console.log('GPS object:', d.gps);
+  console.log('GPS keys:', d.gps ? Object.keys(d.gps) : 'No GPS');
+  console.log('========================================');
   
   // Populate basic drill info
   document.getElementById('drill-name').value=d.name;
@@ -2360,14 +2446,18 @@ function loadPDFDrill(idx) {
   document.getElementById('drill-bip').value=d.bipMins;
   
   // Populate median BOP
+  console.log('Median BOP value:', d.medBOPsecs);
   if(d.medBOPsecs>0) {
     document.getElementById('drill-median-bop').value=d.medBOPsecs;
-    console.log('Set median BOP:', d.medBOPsecs);
+    console.log('✓ Set median BOP:', d.medBOPsecs);
   } else {
     document.getElementById('drill-median-bop').value='';
+    console.log('✗ No median BOP data (value is 0)');
   }
   
   // Populate bin counts
+  console.log('Bin counts array:', d.binCounts);
+  console.log('Rep count:', d.repCount);
   if(d.binCounts&&d.binCounts.length===8) {
     console.log('Populating bins:', d.binCounts);
     d.binCounts.forEach((count,i)=>{
@@ -2392,7 +2482,9 @@ function loadPDFDrill(idx) {
   // Auto-populate GPS fields if available (STATSports data)
   // Convert all values to per-minute for consistency with benchmarks
   if(d.gps && Object.keys(d.gps).length > 0) {
-    console.log('Populating GPS data:', d.gps);
+    console.log('=== GPS AUTO-POPULATION ===');
+    console.log('Raw GPS data:', d.gps);
+    console.log('Drill duration:', d.totalMins, 'mins');
     
     const drillDuration = d.totalMins || 1; // Prevent division by zero
     
@@ -2400,41 +2492,66 @@ function loadPDFDrill(idx) {
     if(d.gps.totalDist) {
       const distPerMin = d.gps.totalDist / drillDuration;
       document.getElementById('drill-totaldist').value = distPerMin.toFixed(1);
+      console.log('✓ Total Dist/min:', distPerMin.toFixed(1));
+    } else {
+      console.log('✗ No totalDist in GPS data');
     }
     
     if(d.gps.hsr) {
       const hsrPerMin = d.gps.hsr / drillDuration;
       document.getElementById('drill-hsr').value = hsrPerMin.toFixed(1);
+      console.log('✓ HSR/min:', hsrPerMin.toFixed(1));
+    } else {
+      console.log('✗ No hsr in GPS data');
     }
     
     if(d.gps.vHSR) {
       const vhsrPerMin = d.gps.vHSR / drillDuration;
       document.getElementById('drill-vhsr').value = vhsrPerMin.toFixed(1);
+      console.log('✓ vHSR/min:', vhsrPerMin.toFixed(1));
+    } else {
+      console.log('✗ No vHSR in GPS data');
     }
     
     if(d.gps.hmld) {
       const hmldPerMin = d.gps.hmld / drillDuration;
       document.getElementById('drill-hmld').value = hmldPerMin.toFixed(1);
+      console.log('✓ HMLD/min:', hmldPerMin.toFixed(1));
+    } else {
+      console.log('✗ No hmld in GPS data');
     }
     
     if(d.gps.accels) {
       const accelsPerMin = d.gps.accels / drillDuration;
       document.getElementById('drill-accels').value = accelsPerMin.toFixed(1);
+      console.log('✓ Accels/min:', accelsPerMin.toFixed(1));
+    } else {
+      console.log('✗ No accels in GPS data');
     }
     
     if(d.gps.decels) {
       const decelsPerMin = d.gps.decels / drillDuration;
       document.getElementById('drill-decels').value = decelsPerMin.toFixed(1);
+      console.log('✓ Decels/min:', decelsPerMin.toFixed(1));
+    } else {
+      console.log('✗ No decels in GPS data');
     }
     
     // Max velocity stays as-is (it's already a peak value, not a total)
     if(d.gps.maxVel) {
       document.getElementById('drill-maxvel').value = d.gps.maxVel;
+      console.log('✓ Max Velocity:', d.gps.maxVel, 'm/s');
+    } else {
+      console.log('✗ No maxVel in GPS data');
     }
+    
+    console.log('=== END GPS AUTO-POPULATION ===');
     
     // Show GPS section
     const gpsSection = document.getElementById('gps-inputs-section');
     if(gpsSection) gpsSection.style.display = 'block';
+  } else {
+    console.log('No GPS data available for this drill');
   }
   
   window._pendingGPS=d.gps||{};
