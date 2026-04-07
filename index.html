@@ -2232,9 +2232,16 @@ function parseDrillPDF(pageTexts,statusEl,resultsEl,listEl) {
           
           // Calculate total BIP time across all sets
           let totalBipSecs = 0;
+          const allBops = [];
+          const combinedBins = [0,0,0,0,0,0,0,0];
+          let combinedRepCount = 0;
+          
           matchingKeys.forEach(k => {
             const setBipSecs = repsData[k].bipSecs.reduce((sum, v) => sum + v, 0);
             totalBipSecs += setBipSecs;
+            allBops.push(...repsData[k].bops);
+            repsData[k].binCounts.forEach((count, i) => combinedBins[i] += count);
+            combinedRepCount += repsData[k].bipSecs.length;
           });
           
           // Create one drill entry per set, split GPS proportionally
@@ -2264,6 +2271,21 @@ function parseDrillPDF(pageTexts,statusEl,resultsEl,listEl) {
             console.log(`  → Set "${setKey}": ${setDrill.repCount} reps, ${setDrill.bipMins} BIP mins (${(setFraction*100).toFixed(0)}% of GPS)`);
             finalResults.push(setDrill);
           });
+          
+          // ALSO create a combined version with all sets merged
+          const combinedName = `${matchingKeys[0].replace(/ \(Set \d+\)$/, '')} (Combined)`;
+          const combinedDrill = {
+            name: combinedName,
+            totalMins: drill.totalMins,
+            bipMins: parseFloat((totalBipSecs / 60).toFixed(1)),
+            medBOPsecs: Math.round(med(allBops)),
+            repCount: combinedRepCount,
+            binCounts: combinedBins,
+            gps: drill.gps // Use original GPS totals
+          };
+          
+          console.log(`  → Combined "${combinedName}": ${combinedRepCount} reps, ${combinedDrill.bipMins} BIP mins (full GPS)`);
+          finalResults.push(combinedDrill);
         }
       });
       
@@ -2277,13 +2299,29 @@ function parseDrillPDF(pageTexts,statusEl,resultsEl,listEl) {
       // Extract Max Velocity from player breakdown pages
       console.log('Extracting Max Velocity from player breakdown pages...');
       results.forEach(drill => {
+        // Extract key words from drill name (ignore common words)
+        const ignoreWords = ['set', 'combined', 'tg', 'pg', 'the', 'and', 'or'];
+        const drillWords = drill.name.toLowerCase()
+          .replace(/[^a-z0-9\s]/g, ' ')
+          .split(/\s+/)
+          .filter(w => w.length >= 3 && !ignoreWords.includes(w));
+        
+        console.log(`  Looking for "${drill.name}" using keywords:`, drillWords);
+        
         // Look for a page with this drill's name as a heading
         for (let pageIdx = 0; pageIdx < pageTexts.length; pageIdx++) {
           const pageText = extractText(pageTexts[pageIdx]);
+          const pageTextLower = pageText.toLowerCase();
           
-          // Check if this page is a drill breakdown for this drill
-          // Page should contain drill name and "Max Velocity (m/s)" column
-          if (pageText.indexOf(drill.name) >= 0 && pageText.indexOf('Max Velocity (m/s)') >= 0) {
+          // Check if page has "Max Velocity (m/s)" column
+          const hasMaxVelColumn = pageText.indexOf('Max Velocity (m/s)') >= 0;
+          if (!hasMaxVelColumn) continue;
+          
+          // Check if page contains at least one key word from drill name
+          const matchCount = drillWords.filter(w => pageTextLower.indexOf(w) >= 0).length;
+          
+          if (matchCount > 0) {
+            console.log(`  → Found match on page ${pageIdx + 1} (${matchCount} keywords matched)`);
             const pageLines = toLines(pageTexts[pageIdx]);
             const maxVels = [];
             
@@ -2317,8 +2355,10 @@ function parseDrillPDF(pageTexts,statusEl,resultsEl,listEl) {
               drill.gps.maxVel = parseFloat(avgMaxVel.toFixed(2));
               
               console.log(`✓ Max Velocity for "${drill.name}": ${drill.gps.maxVel} m/s (avg of ${trimmed.length} players)`);
+            } else {
+              console.log(`✗ No Max Velocity values found on page ${pageIdx + 1}`);
             }
-            break; // Found the page, no need to check others
+            break; // Found a matching page, stop searching
           }
         }
       });
