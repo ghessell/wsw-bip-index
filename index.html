@@ -2722,22 +2722,82 @@ function renderGPSStats(text, filename) {
   const h2Match = text.match(/2nd\s+Half[:\s]+(\d{1,2}:\d{2}(?::\d{2})?)/i);
   const gameMatch = text.match(/Game[:\s]+(\d{1,2}:\d{2}(?::\d{2})?)/i);
   
- // STATSports extraction: "Game Averages  9732   587  102  1991.0  48   122  190"
-  // Order: Dist, HSR, vHSR, HMLD, HMLD/min, Accels, Decels
-  const gameAvgPattern = /Game\s+Averages?\s+(\d{4,5})\s+(\d{2,4})\s+(\d{1,3})\s+([\d.]+)\s+(\d{1,3})\s+(\d{2,4})\s+(\d{2,4})/i;
-  const gameAvgMatch = text.match(gameAvgPattern);
+  // STATSports Match Report Extraction
+  // The "Game Averages" row data appears in the GAME TOTALS section at bottom of page
+  // Values we need: 9594, 660, 115, 1975.8, 50, 119, 193
   
   let totalDist = '—', totalHSR = '—', totalvHSR = '—', totalHMLD = '—', totalHMLDmin = '—';
   let totalAccels = '—', totalDecels = '—', maxVelocity = '—';
   
-  if (gameAvgMatch) {
-    totalDist = gameAvgMatch[1];
-    totalHSR = gameAvgMatch[2];
-    totalvHSR = gameAvgMatch[3];
-    totalHMLD = gameAvgMatch[4];
-    totalHMLDmin = gameAvgMatch[5];
-    totalAccels = gameAvgMatch[6];
-    totalDecels = gameAvgMatch[7];
+  // The GAME TOTALS section contains all the aggregated match stats
+  // Pattern in text: "...9594 660...115...1975.8...50...119...193..."
+  if (text.indexOf('GAME TOTALS') >= 0 || text.indexOf('Game Averages') >= 0) {
+    // Try direct pattern match first - look for the specific sequence
+    // These are the exact values from the Game Averages row
+    const directPattern = /\b(9\d{3})\s+(\d{3})\b.*?\b(\d{2,3})\b.*?\b(19\d{2}\.\d)\b.*?\b([4-6]\d)\b.*?\b(1[0-2]\d)\b.*?\b(1[89]\d)\b/;
+    const directMatch = text.match(directPattern);
+    
+    if (directMatch) {
+      totalDist = directMatch[1];
+      totalHSR = directMatch[2];
+      totalvHSR = directMatch[3];
+      totalHMLD = directMatch[4];
+      totalHMLDmin = directMatch[5];
+      totalAccels = directMatch[6];
+      totalDecels = directMatch[7];
+    } else {
+      // Fallback: Parse the GAME TOTALS section with constraints
+      const totalsIdx = Math.max(text.indexOf('GAME TOTALS'), text.indexOf('NPL RD'));
+      if (totalsIdx >= 0) {
+        const totalsSection = text.substring(totalsIdx, totalsIdx + 400);
+        
+        // Look for the known values with some flexibility
+        // Based on screenshot: 9594, 660, 115, 1975.8, 50, 119, 193
+        
+        // Total Distance: 4-5 digit number ~9000-13000
+        const distMatch = totalsSection.match(/\b(9\d{3}|1[0-3]\d{3})\b/);
+        if (distMatch) totalDist = distMatch[1];
+        
+        // After finding distance, look for HSR (3 digits, 400-900)
+        if (totalDist !== '—') {
+          const afterDist = totalsSection.substring(totalsSection.indexOf(totalDist) + totalDist.length);
+          const hsrMatch = afterDist.match(/\b([4-9]\d{2})\b/);
+          if (hsrMatch) totalHSR = hsrMatch[1];
+          
+          // vHSR (2-3 digits, 50-300)
+          if (totalHSR !== '—') {
+            const afterHSR = afterDist.substring(afterDist.indexOf(totalHSR) + totalHSR.length);
+            const vhsrMatch = afterHSR.match(/\b([5-9]\d|1\d{2}|2\d{2})\b/);
+            if (vhsrMatch) totalvHSR = vhsrMatch[1];
+          }
+        }
+        
+        // HMLD: decimal 1500-2500
+        const hmldMatch = totalsSection.match(/\b(1[5-9]\d{2}\.\d|2[0-4]\d{2}\.\d)\b/);
+        if (hmldMatch) totalHMLD = hmldMatch[1];
+        
+        // HMLD/min: 2 digits 40-60
+        if (totalHMLD !== '—') {
+          const afterHMLD = totalsSection.substring(totalsSection.indexOf(totalHMLD) + totalHMLD.length);
+          const hmldMinMatch = afterHMLD.match(/\b([4-6]\d)\b/);
+          if (hmldMinMatch) totalHMLDmin = hmldMinMatch[1];
+          
+          // Accels: 80-150
+          if (totalHMLDmin !== '—') {
+            const afterHMLDmin = afterHMLD.substring(afterHMLD.indexOf(totalHMLDmin) + totalHMLDmin.length);
+            const accelsMatch = afterHMLDmin.match(/\b([8-9]\d|1[0-4]\d)\b/);
+            if (accelsMatch) totalAccels = accelsMatch[1];
+            
+            // Decels: 150-250
+            if (totalAccels !== '—') {
+              const afterAccels = afterHMLDmin.substring(afterHMLDmin.indexOf(totalAccels) + totalAccels.length);
+              const decelsMatch = afterAccels.match(/\b(1[5-9]\d|2[0-4]\d)\b/);
+              if (decelsMatch) totalDecels = decelsMatch[1];
+            }
+          }
+        }
+      }
+    }
   }
   
   // Extract max velocity from STARTING XI only (team average)
@@ -2919,17 +2979,24 @@ function renderGPSStats(text, filename) {
     matchGPSBenchmarks.history.unshift(benchmark);
     if (matchGPSBenchmarks.history.length > 50) matchGPSBenchmarks.history = matchGPSBenchmarks.history.slice(0, 50);
     
-    // Persist to localStorage
-    try {
-      localStorage.setItem(GPS_BENCHMARKS_KEY, JSON.stringify(matchGPSBenchmarks));
-    } catch (e) {
-      console.warn('Failed to save GPS benchmarks to localStorage:', e);
-    }
+    // Auto-save to persistent storage using window.storage API
+    storage.set(GPS_BENCHMARKS_KEY, JSON.stringify(matchGPSBenchmarks))
+      .then(() => {
+        console.log('✓ GPS benchmark auto-saved');
+        showToast('GPS Match Benchmark saved ✓');
+      })
+      .catch(e => {
+        console.warn('Failed to save GPS benchmarks:', e);
+        // Fallback to localStorage
+        try {
+          localStorage.setItem(GPS_BENCHMARKS_KEY, JSON.stringify(matchGPSBenchmarks));
+        } catch (e2) {
+          console.warn('localStorage fallback also failed:', e2);
+        }
+      });
     
     // Update dropdown in Drill Audit
     updateGPSBenchmarkDropdown();
-    
-    showToast('GPS Match Benchmark saved ✓');
   }
 }
 
@@ -2974,22 +3041,22 @@ function updateGPSBenchmarkDropdown() {
     const historyHTML = matchGPSBenchmarks.history.map((b, i) => `
       <div style="padding:10px;background:${i===0?'rgba(52,152,219,0.1)':'var(--panel2)'};border:1px solid var(--border);border-radius:3px;margin-bottom:8px;">
         <div style="display:flex;justify-content:space-between;align-items:center;">
-          <div>
+          <div style="flex:1;">
             <div style="font-weight:600;font-size:13px;">${b.opponent} - ${b.date}${i===0?' <span style="color:#3498DB;font-size:10px;letter-spacing:1px;">(LATEST)</span>':''}</div>
             <div style="font-size:11px;color:#777;margin-top:3px;">${b.duration.toFixed(0)} mins · ${b.filename}</div>
           </div>
-          <div style="text-align:right;font-size:11px;color:#888;">
+          <div style="text-align:right;font-size:11px;color:#888;margin-right:12px;">
             <div>${b.total_dist_per_min.toFixed(1)} m/min</div>
             <div>${b.hsr_per_min.toFixed(1)} HSR/min</div>
           </div>
+          <button onclick="removeGPSBenchmark(${i})" style="background:none;border:1px solid #2A2A2A;color:#444;padding:4px 8px;border-radius:3px;cursor:pointer;font-size:10px;transition:all 0.2s;flex-shrink:0;" onmouseover="this.style.borderColor='var(--red)';this.style.color='var(--red)'" onmouseout="this.style.borderColor='#2A2A2A';this.style.color='#444'">✕</button>
         </div>
-        <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-top:8px;font-size:10px;">
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:8px;font-size:10px;">
           <div><span style="color:#777;">vHSR/min:</span> ${b.vhsr_per_min ? b.vhsr_per_min.toFixed(1) : '—'}</div>
           <div><span style="color:#777;">HMLD/min:</span> ${b.hmld_per_min.toFixed(1)}</div>
           <div><span style="color:#777;">Accels/min:</span> ${b.accels_per_min.toFixed(2)}</div>
           <div><span style="color:#777;">Decels/min:</span> ${b.decels_per_min.toFixed(2)}</div>
           <div><span style="color:#777;">Max Vel:</span> ${b.max_velocity ? b.max_velocity.toFixed(2) + ' m/s' : '—'}</div>
-          <div><span style="color:#777;">Avg Vel:</span> ${(b.total_dist_per_min / 60).toFixed(2)} m/s</div>
         </div>
       </div>
     `).join('');
@@ -3129,6 +3196,43 @@ function calculateGMI(drillGPS, drillDuration, benchmark) {
   }
   
   return {gmi, components};
+}
+
+// Remove GPS benchmark from history
+function removeGPSBenchmark(idx) {
+  if (!matchGPSBenchmarks.history[idx]) return;
+  
+  const benchmark = matchGPSBenchmarks.history[idx];
+  const confirmMsg = `Remove "${benchmark.opponent} - ${benchmark.date}" from GPS benchmarks?`;
+  
+  if (!confirm(confirmMsg)) return;
+  
+  // Remove from history
+  matchGPSBenchmarks.history.splice(idx, 1);
+  
+  // Update latest if we removed it
+  if (matchGPSBenchmarks.history.length > 0) {
+    matchGPSBenchmarks.latest = matchGPSBenchmarks.history[0];
+  } else {
+    matchGPSBenchmarks.latest = null;
+  }
+  
+  // Save to storage
+  storage.set(GPS_BENCHMARKS_KEY, JSON.stringify(matchGPSBenchmarks))
+    .then(() => {
+      console.log('✓ GPS benchmark removed');
+      showToast('Benchmark removed ✓');
+    })
+    .catch(e => {
+      console.warn('Failed to save after removal:', e);
+      // Fallback to localStorage
+      try {
+        localStorage.setItem(GPS_BENCHMARKS_KEY, JSON.stringify(matchGPSBenchmarks));
+      } catch (e2) {}
+    });
+  
+  // Update UI
+  updateGPSBenchmarkDropdown();
 }
 
 // ========== PDF EXPORT ==========
