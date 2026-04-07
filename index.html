@@ -467,8 +467,12 @@
                 <input type="number" id="drill-totaldist" placeholder="e.g. 2400" min="0" step="1" />
               </div>
               <div>
-                <label class="input-label">HSR >5.5m/s (meters)</label>
+                <label class="input-label">HSR >5.0m/s (meters)</label>
                 <input type="number" id="drill-hsr" placeholder="e.g. 245" min="0" step="1" />
+              </div>
+              <div>
+                <label class="input-label">vHSR >7.0m/s (meters)</label>
+                <input type="number" id="drill-vhsr" placeholder="e.g. 120" min="0" step="1" />
               </div>
               <div>
                 <label class="input-label">HMLD >25.5w/kg</label>
@@ -1759,19 +1763,34 @@ function calculateScore() {
   // Read GPS inputs (optional)
   const gpsTotalDist = parseFloat(document.getElementById('drill-totaldist').value) || 0;
   const gpsHSR = parseFloat(document.getElementById('drill-hsr').value) || 0;
+  const gpsVHSR = parseFloat(document.getElementById('drill-vhsr').value) || 0;
   const gpsHMLD = parseFloat(document.getElementById('drill-hmld').value) || 0;
   const gpsMaxVel = parseFloat(document.getElementById('drill-maxvel').value) || 0;
   const gpsAccels = parseFloat(document.getElementById('drill-accels').value) || 0;
   const gpsDecels = parseFloat(document.getElementById('drill-decels').value) || 0;
-  const gpsBenchmarkIdx = parseInt(document.getElementById('gps-benchmark-select').value);
+  const gpsBenchmarkValue = document.getElementById('gps-benchmark-select').value;
   
-  const hasGPSData = gpsTotalDist > 0 || gpsHSR > 0 || gpsHMLD > 0 || gpsAccels > 0 || gpsDecels > 0 || gpsMaxVel > 0;
+  const hasGPSData = gpsTotalDist > 0 || gpsHSR > 0 || gpsVHSR > 0 || gpsHMLD > 0 || gpsAccels > 0 || gpsDecels > 0 || gpsMaxVel > 0;
   let gpsData = null;
   let gmiResult = null;
+  let selectedBenchmark = null;
   
-  if (hasGPSData && !isNaN(gpsBenchmarkIdx) && matchGPSBenchmarks.history[gpsBenchmarkIdx]) {
-    gpsData = {totalDist: gpsTotalDist, hsr: gpsHSR, hmld: gpsHMLD, maxVel: gpsMaxVel, accels: gpsAccels, decels: gpsDecels};
-    gmiResult = calculateGMI(gpsData, duration, matchGPSBenchmarks.history[gpsBenchmarkIdx]);
+  if (hasGPSData && gpsBenchmarkValue) {
+    gpsData = {totalDist: gpsTotalDist, hsr: gpsHSR, vhsr: gpsVHSR, hmld: gpsHMLD, maxVel: gpsMaxVel, accels: gpsAccels, decels: gpsDecels};
+    
+    // Check if season average was selected
+    if (gpsBenchmarkValue === 'season_avg') {
+      selectedBenchmark = calculateSeasonAverage(matchGPSBenchmarks.history);
+    } else {
+      const gpsBenchmarkIdx = parseInt(gpsBenchmarkValue);
+      if (!isNaN(gpsBenchmarkIdx) && matchGPSBenchmarks.history[gpsBenchmarkIdx]) {
+        selectedBenchmark = matchGPSBenchmarks.history[gpsBenchmarkIdx];
+      }
+    }
+    
+    if (selectedBenchmark) {
+      gmiResult = calculateGMI(gpsData, duration, selectedBenchmark);
+    }
   }
   
   const drillDist={};
@@ -1822,6 +1841,9 @@ function calculateScore() {
     out+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px;">`;
     out+=`<div style="padding:8px;background:var(--panel2);border-radius:3px;"><div style="color:#777;margin-bottom:4px;">Total Dist/min</div><div style="font-weight:700;">${c.totalDist.drill} vs ${c.totalDist.match} m <span style="color:${iconCol(c.totalDist.pct)}">(${c.totalDist.pct}%) ${icon(c.totalDist.pct)}</span></div></div>`;
     out+=`<div style="padding:8px;background:var(--panel2);border-radius:3px;"><div style="color:#777;margin-bottom:4px;">HSR/min</div><div style="font-weight:700;">${c.hsr.drill} vs ${c.hsr.match} <span style="color:${iconCol(c.hsr.pct)}">(${c.hsr.pct}%) ${icon(c.hsr.pct)}</span></div></div>`;
+    if (c.vhsr) {
+      out+=`<div style="padding:8px;background:var(--panel2);border-radius:3px;"><div style="color:#777;margin-bottom:4px;">vHSR/min</div><div style="font-weight:700;">${c.vhsr.drill} vs ${c.vhsr.match} <span style="color:${iconCol(c.vhsr.pct)}">(${c.vhsr.pct}%) ${icon(c.vhsr.pct)}</span></div></div>`;
+    }
     out+=`<div style="padding:8px;background:var(--panel2);border-radius:3px;"><div style="color:#777;margin-bottom:4px;">HMLD/min</div><div style="font-weight:700;">${c.hmld.drill} vs ${c.hmld.match} <span style="color:${iconCol(c.hmld.pct)}">(${c.hmld.pct}%) ${icon(c.hmld.pct)}</span></div></div>`;
     if (c.maxVel) {
       out+=`<div style="padding:8px;background:var(--panel2);border-radius:3px;"><div style="color:#777;margin-bottom:4px;">Max Velocity</div><div style="font-weight:700;">${c.maxVel.drill} vs ${c.maxVel.match} m/s <span style="color:${iconCol(c.maxVel.pct)}">(${c.maxVel.pct}%) ${icon(c.maxVel.pct)}</span></div></div>`;
@@ -2366,12 +2388,30 @@ function loadPDFDrill(idx) {
   // Auto-populate GPS fields if available (STATSports data)
   if(d.gps && Object.keys(d.gps).length > 0) {
     console.log('Populating GPS data:', d.gps);
+    
+    // Total values
     if(d.gps.totalDist) document.getElementById('drill-totaldist').value = d.gps.totalDist;
     if(d.gps.hsr) document.getElementById('drill-hsr').value = d.gps.hsr;
-    if(d.gps.hmld) document.getElementById('drill-hmld').value = d.gps.hmld;
+    if(d.gps.vHSR) document.getElementById('drill-vhsr').value = d.gps.vHSR;
     if(d.gps.maxVel) document.getElementById('drill-maxvel').value = d.gps.maxVel;
-    if(d.gps.accels) document.getElementById('drill-accels').value = d.gps.accels;
-    if(d.gps.decels) document.getElementById('drill-decels').value = d.gps.decels;
+    
+    // Calculate per-minute values for HMLD, Accels, Decels if not already provided
+    const drillDuration = d.totalMins || 1; // Prevent division by zero
+    
+    if(d.gps.hmld) {
+      // HMLD is typically total, convert to per-minute if needed
+      const hmldValue = d.gps.hmld;
+      document.getElementById('drill-hmld').value = hmldValue;
+    }
+    
+    if(d.gps.accels) {
+      // Accels/Decels are counts, use as-is
+      document.getElementById('drill-accels').value = d.gps.accels;
+    }
+    
+    if(d.gps.decels) {
+      document.getElementById('drill-decels').value = d.gps.decels;
+    }
     
     // Show GPS section
     const gpsSection = document.getElementById('gps-inputs-section');
@@ -2641,6 +2681,7 @@ function renderGPSStats(text, filename) {
       duration: durationMins,
       total_dist_per_min: parseFloat(totalDist) / durationMins,
       hsr_per_min: parseFloat(totalHSR) / durationMins,
+      vhsr_per_min: totalvHSR !== '—' ? parseFloat(totalvHSR) / durationMins : 0,
       hmld_per_min: parseFloat(totalHMLD) / durationMins,
       accels_per_min: parseFloat(totalAccels) / durationMins,
       decels_per_min: parseFloat(totalDecels) / durationMins,
@@ -2683,9 +2724,19 @@ function updateGPSBenchmarkDropdown() {
   }
   
   // Build options from history
-  const options = matchGPSBenchmarks.history.map((b, i) => {
+  let options = '';
+  
+  // Add Season Average option if we have 2+ games
+  if (matchGPSBenchmarks.history.length >= 2) {
+    const gameCount = matchGPSBenchmarks.history.length;
+    options += `<option value="season_avg">⭐ Season Average (${gameCount} games)</option>`;
+    options += '<option disabled>───────────────</option>';
+  }
+  
+  // Add individual games
+  options += matchGPSBenchmarks.history.map((b, i) => {
     const label = i === 0 ? `${b.opponent} - ${b.date} (Latest)` : `${b.opponent} - ${b.date}`;
-    return `<option value="${i}" ${i===0?'selected':''}>${label}</option>`;
+    return `<option value="${i}" ${i===0 && matchGPSBenchmarks.history.length < 2 ?'selected':''}>${label}</option>`;
   }).join('');
   
   select.innerHTML = options;
@@ -2706,7 +2757,8 @@ function updateGPSBenchmarkDropdown() {
             <div>${b.hsr_per_min.toFixed(1)} HSR/min</div>
           </div>
         </div>
-        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:8px;font-size:10px;">
+        <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-top:8px;font-size:10px;">
+          <div><span style="color:#777;">vHSR/min:</span> ${b.vhsr_per_min ? b.vhsr_per_min.toFixed(1) : '—'}</div>
           <div><span style="color:#777;">HMLD/min:</span> ${b.hmld_per_min.toFixed(1)}</div>
           <div><span style="color:#777;">Accels/min:</span> ${b.accels_per_min.toFixed(2)}</div>
           <div><span style="color:#777;">Decels/min:</span> ${b.decels_per_min.toFixed(2)}</div>
@@ -2719,12 +2771,66 @@ function updateGPSBenchmarkDropdown() {
   }
 }
 
+// Calculate season average benchmark from all match GPS data
+function calculateSeasonAverage(benchmarks) {
+  if (!benchmarks || benchmarks.length === 0) return null;
+  
+  const avg = {
+    opponent: `Season Average (${benchmarks.length} games)`,
+    date: 'All Season',
+    filename: 'Calculated Average',
+    duration: 0,
+    total_dist_per_min: 0,
+    hsr_per_min: 0,
+    vhsr_per_min: 0,
+    hmld_per_min: 0,
+    accels_per_min: 0,
+    decels_per_min: 0,
+    max_velocity: 0
+  };
+  
+  let maxVelCount = 0;
+  let vhsrCount = 0;
+  
+  benchmarks.forEach(b => {
+    avg.duration += b.duration || 0;
+    avg.total_dist_per_min += b.total_dist_per_min || 0;
+    avg.hsr_per_min += b.hsr_per_min || 0;
+    avg.hmld_per_min += b.hmld_per_min || 0;
+    avg.accels_per_min += b.accels_per_min || 0;
+    avg.decels_per_min += b.decels_per_min || 0;
+    
+    if (b.vhsr_per_min && b.vhsr_per_min > 0) {
+      avg.vhsr_per_min += b.vhsr_per_min;
+      vhsrCount++;
+    }
+    
+    if (b.max_velocity && b.max_velocity > 0) {
+      avg.max_velocity += b.max_velocity;
+      maxVelCount++;
+    }
+  });
+  
+  const n = benchmarks.length;
+  avg.duration = avg.duration / n;
+  avg.total_dist_per_min = avg.total_dist_per_min / n;
+  avg.hsr_per_min = avg.hsr_per_min / n;
+  avg.vhsr_per_min = vhsrCount > 0 ? avg.vhsr_per_min / vhsrCount : 0;
+  avg.hmld_per_min = avg.hmld_per_min / n;
+  avg.accels_per_min = avg.accels_per_min / n;
+  avg.decels_per_min = avg.decels_per_min / n;
+  avg.max_velocity = maxVelCount > 0 ? avg.max_velocity / maxVelCount : 0;
+  
+  return avg;
+}
+
 function calculateGMI(drillGPS, drillDuration, benchmark) {
   if (!drillGPS || !benchmark || !drillDuration || drillDuration === 0) return null;
   
   // Calculate drill per-minute values
   const drillTotalDistpm = drillGPS.totalDist / drillDuration;
   const drillHSRpm = drillGPS.hsr / drillDuration;
+  const drillVHSRpm = drillGPS.vhsr / drillDuration;
   const drillHMLDpm = drillGPS.hmld / drillDuration;
   const drillAccelspm = drillGPS.accels / drillDuration;
   const drillDecelspm = drillGPS.decels / drillDuration;
@@ -2741,6 +2847,7 @@ function calculateGMI(drillGPS, drillDuration, benchmark) {
   
   const totalDistScore = similarity(drillTotalDistpm, benchmark.total_dist_per_min);
   const hsrScore = similarity(drillHSRpm, benchmark.hsr_per_min);
+  const vhsrScore = benchmark.vhsr_per_min ? similarity(drillVHSRpm, benchmark.vhsr_per_min) : null;
   const hmldScore = similarity(drillHMLDpm, benchmark.hmld_per_min);
   const accelsScore = similarity(drillAccelspm, benchmark.accels_per_min);
   const decelsScore = similarity(drillDecelspm, benchmark.decels_per_min);
@@ -2750,18 +2857,21 @@ function calculateGMI(drillGPS, drillDuration, benchmark) {
   const maxVelScore = hasMaxVel ? similarity(drillMaxVel, benchmark.max_velocity) : null;
   
   // Overall GMI - adaptive weighting based on available components
-  // 6 components (all GPS data): ~16.67% each
-  // 5 components (no max vel): 20% each
-  // 4 components (original): 25% each
   let gmi;
   let numComponents = 5; // totalDist, HSR, HMLD, Accels, Decels
+  let scoreSum = totalDistScore + hsrScore + hmldScore + accelsScore + decelsScore;
+  
+  if (vhsrScore !== null) {
+    numComponents++;
+    scoreSum += vhsrScore;
+  }
   
   if (hasMaxVel) {
-    numComponents = 6;
-    gmi = Math.round((totalDistScore + hsrScore + hmldScore + maxVelScore + accelsScore + decelsScore) / 6);
-  } else {
-    gmi = Math.round((totalDistScore + hsrScore + hmldScore + accelsScore + decelsScore) / 5);
+    numComponents++;
+    scoreSum += maxVelScore;
   }
+  
+  gmi = Math.round(scoreSum / numComponents);
   
   const components = {
     totalDist: {score: Math.round(totalDistScore), drill: drillTotalDistpm.toFixed(0), match: benchmark.total_dist_per_min.toFixed(0), pct: (drillTotalDistpm/benchmark.total_dist_per_min*100).toFixed(0)},
@@ -2770,6 +2880,16 @@ function calculateGMI(drillGPS, drillDuration, benchmark) {
     accels: {score: Math.round(accelsScore), drill: drillAccelspm.toFixed(1), match: benchmark.accels_per_min.toFixed(1), pct: (drillAccelspm/benchmark.accels_per_min*100).toFixed(0)},
     decels: {score: Math.round(decelsScore), drill: drillDecelspm.toFixed(1), match: benchmark.decels_per_min.toFixed(1), pct: (drillDecelspm/benchmark.decels_per_min*100).toFixed(0)}
   };
+  
+  // Add vHSR if benchmark has it
+  if (vhsrScore !== null && benchmark.vhsr_per_min) {
+    components.vhsr = {
+      score: Math.round(vhsrScore), 
+      drill: drillVHSRpm.toFixed(1), 
+      match: benchmark.vhsr_per_min.toFixed(1), 
+      pct: benchmark.vhsr_per_min > 0 ? (drillVHSRpm/benchmark.vhsr_per_min*100).toFixed(0) : '0'
+    };
+  }
   
   // Add max velocity if available
   if (hasMaxVel) {
