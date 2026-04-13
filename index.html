@@ -2800,18 +2800,51 @@ function renderGPSStats(text, filename) {
   // Extract match header info (1st Half, 2nd Half, Game durations)
   const h1Match = text.match(/1st\s+Half[:\s]+(\d{1,2}:\d{2}(?::\d{2})?)/i);
   const h2Match = text.match(/2nd\s+Half[:\s]+(\d{1,2}:\d{2}(?::\d{2})?)/i);
-  const gameMatch = text.match(/Game[:\s]+(\d{1,2}:\d{2}(?::\d{2})?)/i);
+  
+  // Game duration - try multiple patterns
+  let gameMatch = text.match(/Game[:\s]+(\d{1,2}:\d{2}(?::\d{2})?)/i);
+  
+  // NEW FORMAT: Duration appears right after "Game Averages"
+  // Pattern: "Game Averages\n\n94:25"
+  if (!gameMatch) {
+    const gameAvgDuration = text.match(/Game Averages\s+(\d{1,2}:\d{2}(?::\d{2})?)/i);
+    if (gameAvgDuration) {
+      gameMatch = gameAvgDuration;
+    }
+  }
   
   // STATSports Match Report Extraction
-  // The "Game Averages" row data appears in the GAME TOTALS section at bottom of page
-  // Values we need: 9594, 660, 115, 1975.8, 50, 119, 193
+  // Handle BOTH old and new formats
+  // OLD FORMAT: Game Averages row in GAME TOTALS section at bottom
+  // NEW FORMAT: Game Averages in table header, values on "Game Averages" row
   
   let totalDist = '—', totalHSR = '—', totalvHSR = '—', totalHMLD = '—', totalHMLDmin = '—';
   let totalAccels = '—', totalDecels = '—', maxVelocity = '—';
   
-  // The GAME TOTALS section contains all the aggregated match stats
-  // Pattern in text: "...9594 660...115...1975.8...50...119...193..."
-  if (text.indexOf('GAME TOTALS') >= 0 || text.indexOf('Game Averages') >= 0) {
+  // METHOD 1: NEW FORMAT - Look for "Game Averages" row with values immediately following
+  // Format: "Game Averages\n\n94:25\n\n9765\n\n624\n\n92\n\n2088.3\n\n53\n\n131\n\n200"
+  const gameAvgIdx = text.indexOf('Game Averages');
+  if (gameAvgIdx >= 0) {
+    const gameAvgSection = text.substring(gameAvgIdx, gameAvgIdx + 200);
+    
+    // Extract sequential values after "Game Averages"
+    // Pattern: duration, distance, HSR, vHSR, HMLD, HMLD/min, Accels, Decels
+    const valuePattern = /Game Averages\s+(?:\d+:\d+\s+)?(\d{4,5})\s+(\d{3})\s+(\d{2,3})\s+([\d.]+)\s+(\d{2})\s+(\d{2,3})\s+(\d{2,3})/;
+    const newFormatMatch = gameAvgSection.match(valuePattern);
+    
+    if (newFormatMatch) {
+      totalDist = newFormatMatch[1];
+      totalHSR = newFormatMatch[2];
+      totalvHSR = newFormatMatch[3];
+      totalHMLD = newFormatMatch[4];
+      totalHMLDmin = newFormatMatch[5];
+      totalAccels = newFormatMatch[6];
+      totalDecels = newFormatMatch[7];
+    }
+  }
+  
+  // METHOD 2: OLD FORMAT - GAME TOTALS section (fallback if new format didn't work)
+  if (totalDist === '—' && (text.indexOf('GAME TOTALS') >= 0 || text.indexOf('Game Averages') >= 0)) {
     // Try direct pattern match first - look for the specific sequence
     // These are the exact values from the Game Averages row
     const directPattern = /\b(9\d{3})\s+(\d{3})\b.*?\b(\d{2,3})\b.*?\b(19\d{2}\.\d)\b.*?\b([4-6]\d)\b.*?\b(1[0-2]\d)\b.*?\b(1[89]\d)\b/;
@@ -2830,9 +2863,6 @@ function renderGPSStats(text, filename) {
       const totalsIdx = Math.max(text.indexOf('GAME TOTALS'), text.indexOf('NPL RD'));
       if (totalsIdx >= 0) {
         const totalsSection = text.substring(totalsIdx, totalsIdx + 400);
-        
-        // Look for the known values with some flexibility
-        // Based on screenshot: 9594, 660, 115, 1975.8, 50, 119, 193
         
         // Total Distance: 4-5 digit number ~9000-13000
         const distMatch = totalsSection.match(/\b(9\d{3}|1[0-3]\d{3})\b/);
